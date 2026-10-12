@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, Inject, Injectable } from "@nestjs/common";
 import { USER_REPOSITORY } from "src/users/domain/user.repository";
 import type { IUserRepository } from "src/users/domain/user.repository";
-import { RegisterUserDto } from "../api/dto/create-user.dto";
+import { RegisterUserCommand } from "./commands/register.command";
 import type { IPasswordHasher } from "./ports/password-hasher";
 import { PASSWORD_HASHER } from "./ports/password-hasher";
 
@@ -15,7 +15,7 @@ export class RegisterUseCase {
         private readonly passwordHasher: IPasswordHasher
     ){}
 
-    async execute(dto: RegisterUserDto){
+    async execute(dto: RegisterUserCommand){
         const userExists = await this.usersRepository.getByEmail(dto.email);
         if (userExists != null){
             throw new ConflictException(`El email ${dto.email} ya se encuentra registrado`);
