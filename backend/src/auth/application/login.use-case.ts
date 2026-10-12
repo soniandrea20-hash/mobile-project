@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, Inject, Injectable, UnauthorizedException } from "@nestjs/common";
 import { USER_REPOSITORY } from "src/users/domain/user.repository";
 import type { IUserRepository } from "src/users/domain/user.repository";
-import { LoginUserDto } from "../api/dto/login-user.dto";
+import { LoginCommand } from "./commands/login.command";
 import type { IPasswordHasher } from "./ports/password-hasher";
 import { PASSWORD_HASHER } from "./ports/password-hasher";
 import { TOKEN_SERVICE } from "./ports/token-service";
@@ -19,7 +19,7 @@ export class LoginUseCase {
         private readonly tokenService: ITokenService
     ){}
 
-    async execute(dto: LoginUserDto){
+    async execute(dto: LoginCommand){
         const userExists = await this.usersRepository.getByEmailWithPassword(dto.email);
         if (userExists == null || !userExists.is_active){
             throw new UnauthorizedException(`El email ${dto.email} no se encuentra registrado`);
