@@ -21,7 +21,7 @@ export interface ResponseUpdateTenant {
 export interface ITenantRepository{
     create(tenant:CreateTenantData):Promise<ResponseTenantData>;
     update(tenantId: string, tenant: ResponseUpdateTenant):Promise<ResponseTenantData>;
-    delete(id:string):boolean;
+    delete(id:string):Promise<boolean>;
     getAll():Promise<Tenant[]>;
     getById(id:string):Promise<Tenant | null>;
     getByName(name:string):Promise<Tenant | null>;

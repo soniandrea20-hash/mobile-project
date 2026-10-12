@@ -40,11 +40,20 @@ export class PostgreTenantRepository implements ITenantRepository{
             is_active: saved.is_active
         }
     }
-    delete(id: string): boolean {
-        throw new Error("Method not implemented.");
+    async delete(id: string): Promise<boolean> {
+        const result = await this.tenantDb.update(id, { is_active: false });
+        if (result.affected === 0) {
+            return false;
+        }
+        return true;
     }
-    getAll(): Promise<Tenant[]> {
-        throw new Error("Method not implemented.");
+    async getAll(): Promise<Tenant[]> {
+        const entities = this.tenantDb.find({
+            where: {
+                is_active: true
+            }
+        });
+        return entities;
     }
     async getById(id:string): Promise<Tenant> {
         const entity = await this.tenantDb.findOne({
