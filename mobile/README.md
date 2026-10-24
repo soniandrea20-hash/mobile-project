@@ -54,3 +54,50 @@ Join our community of developers creating universal apps.
 
 - [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
 - [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+
+
+## EduKit — Ejecución del proyecto
+
+EduKit es una aplicación académica desarrollada con Expo, React Native y TypeScript para funcionar en Android y web.
+
+### Instalar dependencias
+
+Desde la carpeta `mobile`, ejecutar:
+
+```bash
+npm ci
+```
+
+### Iniciar en web
+
+```bash
+npm run web
+```
+
+Expo iniciará el servidor de desarrollo y mostrará la dirección local para abrir la aplicación en el navegador.
+
+### Iniciar en Android
+
+```bash
+npm run android
+```
+
+Se necesita tener configurado el Android SDK y, si se utiliza un emulador, Android Studio con un dispositivo virtual disponible.
+
+### Iniciar Expo
+
+```bash
+npm start
+```
+
+### Verificar las dependencias
+
+```bash
+npx expo-doctor
+```
+
+Este comando comprueba la compatibilidad de las dependencias con la configuración de Expo.
+
+### Pantalla inicial
+
+La pantalla principal presenta EduKit y sus secciones iniciales: catálogo, pedidos y donaciones. Las funcionalidades de cada sección se desarrollarán progresivamente.
