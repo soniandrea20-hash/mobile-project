@@ -11,4 +11,8 @@ export class JwtTokenService implements ITokenService{
     sign(payload: {sub:string;email:string}):Promise<string>{
         return this.jwtService.signAsync(payload);
     }
+
+    verify(token: string):Promise<{sub:string;email:string}>{
+        return this.jwtService.verifyAsync(token);
+    }
 }

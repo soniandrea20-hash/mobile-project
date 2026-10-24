@@ -9,6 +9,8 @@ import { TOKEN_SERVICE } from './application/ports/token-service';
 import { JwtTokenService } from './infraestructure/jwt-token-service';
 import { JwtModule, JwtModuleOptions } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { APP_GUARD } from '@nestjs/core';
+import { JwtAuthGuard } from './api/jwt-auth.guard';
 
 @Module({
   imports: [
@@ -41,6 +43,10 @@ import { ConfigService } from '@nestjs/config';
     {
       provide: TOKEN_SERVICE,
       useClass: JwtTokenService
+    },
+    {
+      provide: APP_GUARD,
+      useClass: JwtAuthGuard
     }
   ],
   exports: []

@@ -9,7 +9,9 @@ import { RegisterUserDto } from './dto/create-user.dto';
 import { RegisterUseCase } from '../application/register.use-case'
 import { LoginUseCase } from '../application/login.use-case'
 import { LoginUserDto } from './dto/login-user.dto';
+import { Public } from './public.decorator';
 
+@Public()
 @Controller('auth')
 export class AuthController {
   constructor(
