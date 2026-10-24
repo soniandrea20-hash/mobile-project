@@ -1,180 +1,159 @@
-import { Image } from 'expo-image';
-import { SymbolView } from 'expo-symbols';
-import { Platform, Pressable, ScrollView, StyleSheet } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { ExternalLink } from '@/components/external-link';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Collapsible } from '@/components/ui/collapsible';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
+import { useState } from 'react';
+import {
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-export default function TabTwoScreen() {
-  const safeAreaInsets = useSafeAreaInsets();
-  const insets = {
-    ...safeAreaInsets,
-    bottom: safeAreaInsets.bottom + BottomTabInset + Spacing.three,
-  };
-  const theme = useTheme();
+import { Button } from '@/components/ui/edukit/button';
+import { Card } from '@/components/ui/edukit/card';
+import { Comment } from '@/components/ui/edukit/comment';
+import { FeedbackState } from '@/components/ui/edukit/feedback-state';
+import { TextField } from '@/components/ui/edukit/text-field';
+import {
+  EduKitColors,
+  EduKitLayout,
+  EduKitSpacing,
+} from '@/components/ui/edukit/tokens';
 
-  const contentPlatformStyle = Platform.select({
-    android: {
-      paddingTop: insets.top,
-      paddingLeft: insets.left,
-      paddingRight: insets.right,
-      paddingBottom: insets.bottom,
-    },
-    web: {
-      paddingTop: Spacing.six,
-      paddingBottom: Spacing.four,
-    },
-  });
+export default function ExploreScreen() {
+  const [name, setName] = useState('');
+  const [showError, setShowError] = useState(false);
+  const [feedback, setFeedback] = useState<'loading' | 'empty' | 'error'>('empty');
 
   return (
-    <ScrollView
-      style={[styles.scrollView, { backgroundColor: theme.background }]}
-      contentInset={insets}
-      contentContainerStyle={[styles.contentContainer, contentPlatformStyle]}>
-      <ThemedView style={styles.container}>
-        <ThemedView style={styles.titleContainer}>
-          <ThemedText type="subtitle">Explore</ThemedText>
-          <ThemedText style={styles.centerText} themeColor="textSecondary">
-            This starter app includes example{'\n'}code to help you get started.
-          </ThemedText>
+    <SafeAreaView style={styles.safeArea}>
+      <ScrollView contentContainerStyle={styles.container}>
+        <Text style={styles.eyebrow}>EDUKIT · SISTEMA VISUAL</Text>
+        <Text style={styles.title}>Componentes reutilizables</Text>
+        <Text style={styles.description}>
+          Demostración de los controles y estados compartidos de EduKit.
+        </Text>
 
-          <ExternalLink href="https://docs.expo.dev" asChild>
-            <Pressable style={({ pressed }) => pressed && styles.pressed}>
-              <ThemedView type="backgroundElement" style={styles.linkButton}>
-                <ThemedText type="link">Expo documentation</ThemedText>
-                <SymbolView
-                  tintColor={theme.text}
-                  name={{ ios: 'arrow.up.right.square', android: 'link', web: 'link' }}
-                  size={12}
-                />
-              </ThemedView>
-            </Pressable>
-          </ExternalLink>
-        </ThemedView>
+        <Text style={styles.sectionTitle}>Botones</Text>
+        <View style={styles.group}>
+          <Button title="Principal" onPress={() => setFeedback('loading')} />
+          <Button title="Secundario" variant="secondary" onPress={() => setFeedback('empty')} />
+          <Button title="Contorno" variant="outline" onPress={() => setFeedback('error')} />
+          <Button title="Peligro" variant="danger" onPress={() => setShowError(true)} />
+          <Button title="Cargando..." loading onPress={() => {}} />
+        </View>
 
-        <ThemedView style={styles.sectionsWrapper}>
-          <Collapsible title="File-based routing">
-            <ThemedText type="small">
-              This app has two screens: <ThemedText type="code">src/app/index.tsx</ThemedText> and{' '}
-              <ThemedText type="code">src/app/explore.tsx</ThemedText>
-            </ThemedText>
-            <ThemedText type="small">
-              The layout file in <ThemedText type="code">src/app/_layout.tsx</ThemedText> sets up
-              the tab navigator.
-            </ThemedText>
-            <ExternalLink href="https://docs.expo.dev/router/introduction">
-              <ThemedText type="linkPrimary">Learn more</ThemedText>
-            </ExternalLink>
-          </Collapsible>
+        <Text style={styles.sectionTitle}>Campo de texto</Text>
+        <Card>
+          <TextField
+            label="Nombre"
+            placeholder="Escribí tu nombre"
+            value={name}
+            onChangeText={(value) => {
+              setName(value);
+              setShowError(false);
+            }}
+            error={showError ? 'Este es un mensaje de ejemplo.' : undefined}
+          />
+          <Button
+            title="Validar campo"
+            variant="outline"
+            onPress={() => setShowError(name.trim().length === 0)}
+          />
+        </Card>
 
-          <Collapsible title="Android, iOS, and web support">
-            <ThemedView type="backgroundElement" style={styles.collapsibleContent}>
-              <ThemedText type="small">
-                You can open this project on Android, iOS, and the web. To open the web version,
-                press <ThemedText type="smallBold">w</ThemedText> in the terminal running this
-                project.
-              </ThemedText>
-              <Image
-                source={require('@/assets/images/tutorial-web.png')}
-                style={styles.imageTutorial}
-              />
-            </ThemedView>
-          </Collapsible>
+        <Text style={styles.sectionTitle}>Tarjeta</Text>
+        <Card>
+          <Text style={styles.cardTitle}>Catálogo EduKit</Text>
+          <Text style={styles.body}>
+            Una tarjeta reutilizable para presentar información y acciones.
+          </Text>
+          <Button title="Ver productos" onPress={() => setFeedback('empty')} fullWidth />
+        </Card>
 
-          <Collapsible title="Images">
-            <ThemedText type="small">
-              For static images, you can use the <ThemedText type="code">@2x</ThemedText> and{' '}
-              <ThemedText type="code">@3x</ThemedText> suffixes to provide files for different
-              screen densities.
-            </ThemedText>
-            <Image source={require('@/assets/images/react-logo.png')} style={styles.imageReact} />
-            <ExternalLink href="https://reactnative.dev/docs/images">
-              <ThemedText type="linkPrimary">Learn more</ThemedText>
-            </ExternalLink>
-          </Collapsible>
+        <Text style={styles.sectionTitle}>Comentario</Text>
+        <Comment
+          author="María"
+          date="Hoy"
+          message="La interfaz es clara y fácil de usar."
+        />
 
-          <Collapsible title="Light and dark mode components">
-            <ThemedText type="small">
-              This template has light and dark mode support. The{' '}
-              <ThemedText type="code">useColorScheme()</ThemedText> hook lets you inspect what the
-              user&apos;s current color scheme is, and so you can adjust UI colors accordingly.
-            </ThemedText>
-            <ExternalLink href="https://docs.expo.dev/develop/user-interface/color-themes/">
-              <ThemedText type="linkPrimary">Learn more</ThemedText>
-            </ExternalLink>
-          </Collapsible>
+        <Text style={styles.sectionTitle}>Estados de interfaz</Text>
+        <View style={styles.group}>
+          <Button title="Carga" variant="outline" onPress={() => setFeedback('loading')} />
+          <Button title="Vacío" variant="outline" onPress={() => setFeedback('empty')} />
+          <Button title="Error" variant="outline" onPress={() => setFeedback('error')} />
+        </View>
 
-          <Collapsible title="Animations">
-            <ThemedText type="small">
-              This template includes an example of an animated component. The{' '}
-              <ThemedText type="code">src/components/ui/collapsible.tsx</ThemedText> component uses
-              the powerful <ThemedText type="code">react-native-reanimated</ThemedText> library to
-              animate opening this hint.
-            </ThemedText>
-          </Collapsible>
-        </ThemedView>
-        {Platform.OS === 'web' && <WebBadge />}
-      </ThemedView>
-    </ScrollView>
+        <FeedbackState
+          type={feedback}
+          title={
+            feedback === 'loading'
+              ? 'Cargando datos'
+              : feedback === 'empty'
+                ? 'Catálogo vacío'
+                : 'No se pudo cargar'
+          }
+          message={
+            feedback === 'loading'
+              ? 'Esperá un momento.'
+              : feedback === 'empty'
+                ? 'Todavía no hay productos para mostrar.'
+                : 'Comprobá la conexión e intentá nuevamente.'
+          }
+          actionLabel={feedback === 'loading' ? undefined : 'Reintentar'}
+          onAction={feedback === 'error' ? () => setFeedback('loading') : () => setFeedback('empty')}
+        />
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  scrollView: {
+  safeArea: {
     flex: 1,
-  },
-  contentContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
+    backgroundColor: EduKitColors.background,
   },
   container: {
-    maxWidth: MaxContentWidth,
-    flexGrow: 1,
-  },
-  titleContainer: {
-    gap: Spacing.three,
-    alignItems: 'center',
-    paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.six,
-  },
-  centerText: {
-    textAlign: 'center',
-  },
-  pressed: {
-    opacity: 0.7,
-  },
-  linkButton: {
-    flexDirection: 'row',
-    paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.two,
-    borderRadius: Spacing.five,
-    justifyContent: 'center',
-    gap: Spacing.one,
-    alignItems: 'center',
-  },
-  sectionsWrapper: {
-    gap: Spacing.five,
-    paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.three,
-  },
-  collapsibleContent: {
-    alignItems: 'center',
-  },
-  imageTutorial: {
     width: '100%',
-    aspectRatio: 296 / 171,
-    borderRadius: Spacing.three,
-    marginTop: Spacing.two,
-  },
-  imageReact: {
-    width: 100,
-    height: 100,
+    maxWidth: EduKitLayout.contentMaxWidth,
     alignSelf: 'center',
+    padding: EduKitLayout.screenPadding,
+    paddingBottom: EduKitSpacing.xxl,
+    gap: EduKitSpacing.md,
+  },
+  eyebrow: {
+    color: EduKitColors.primary,
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 1,
+  },
+  title: {
+    color: EduKitColors.text,
+    fontSize: 26,
+    fontWeight: '700',
+  },
+  description: {
+    color: EduKitColors.textSecondary,
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  sectionTitle: {
+    color: EduKitColors.text,
+    fontSize: 19,
+    fontWeight: '700',
+    marginTop: EduKitSpacing.md,
+  },
+  group: {
+    gap: EduKitSpacing.sm,
+  },
+  cardTitle: {
+    color: EduKitColors.text,
+    fontSize: 17,
+    fontWeight: '700',
+  },
+  body: {
+    color: EduKitColors.textSecondary,
+    fontSize: 14,
+    lineHeight: 21,
   },
 });
