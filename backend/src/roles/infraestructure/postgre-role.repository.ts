@@ -36,4 +36,16 @@ export class PostgreRoleRepository implements IRoleRepository{
             .where('rp.role_id = :roleId', { roleId })
             .getMany();
     }
+
+    async getPermissionCodesByUserId(userId: string): Promise<string[]> {
+        const rows = await this.permissionDb
+            .createQueryBuilder('p')
+            .select('p.code', 'code')
+            .distinct(true)
+            .innerJoin('roles_permissions', 'rp', 'rp.permission_id = p.permission_id')
+            .innerJoin('users_roles', 'ur', 'ur.role_id = rp.role_id')
+            .where('ur.user_id = :userId', { userId })
+            .getRawMany<{ code: string }>();
+        return rows.map((r) => r.code);
+    }
 }

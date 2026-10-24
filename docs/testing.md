@@ -25,3 +25,18 @@ Manual:
 - Protected endpoint with expired or tampered token: 401, no internal error detail in the body.
 - Protected endpoint with valid token from `/auth/login`: reaches the handler.
 - `/auth/register` and `/auth/login` still reachable without token.
+
+## Permissions guard (BU-021)
+
+Automated (`backend/test/roles/permissions.guard.spec.ts`):
+- `@Public()` route is allowed without querying the DB.
+- No `@RequirePermissions` (or empty list) is allowed without querying the DB.
+- Missing `request.user` throws `ForbiddenException`.
+- User lacking one of the required codes throws `ForbiddenException`.
+- User holding all required codes returns true; repository called with `request.user.sub`.
+
+Manual:
+- User without the required permission: 403.
+- User with the required permission: 200.
+- Permission revoked in DB takes effect on the next request without re-login.
+- Route without `@RequirePermissions` only needs a valid token.

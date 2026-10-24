@@ -11,10 +11,13 @@ import { JwtModule, JwtModuleOptions } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtAuthGuard } from './api/jwt-auth.guard';
+import { RolesModule } from 'src/roles/roles.module';
+import { PermissionsGuard } from 'src/roles/api/permissions.guard';
 
 @Module({
   imports: [
     UsersModule,
+    RolesModule,
     JwtModule.registerAsync({
       inject:[ConfigService],
       useFactory:(config:ConfigService) => {
@@ -47,6 +50,11 @@ import { JwtAuthGuard } from './api/jwt-auth.guard';
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard
+    },
+    // Order matters: JWT must run first so request.user exists
+    {
+      provide: APP_GUARD,
+      useClass: PermissionsGuard
     }
   ],
   exports: []

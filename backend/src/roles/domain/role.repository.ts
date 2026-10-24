@@ -7,4 +7,5 @@ export interface IRoleRepository{
     getAll():Promise<Role[]>;
     getById(id:string):Promise<Role | null>;
     getPermissionsByRoleId(roleId:string):Promise<Permission[]>;
+    getPermissionCodesByUserId(userId:string):Promise<string[]>;
 }
