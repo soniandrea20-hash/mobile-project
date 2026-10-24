@@ -57,3 +57,26 @@ create table if not exists users_stores (
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     PRIMARY KEY (user_id, store_id)
 );
+
+create table if not exists permissions (
+    permission_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    code VARCHAR(100) NOT NULL,
+    description VARCHAR(255),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT uq_permissions_code UNIQUE (code)
+);
+
+create table if not exists roles_permissions (
+    role_id UUID NOT NULL,
+    permission_id UUID NOT NULL,
+
+    PRIMARY KEY (role_id, permission_id),
+
+    CONSTRAINT fk_roles_permissions_role FOREIGN KEY (role_id) REFERENCES roles(role_id),
+    CONSTRAINT fk_roles_permissions_permission FOREIGN KEY (permission_id) REFERENCES permissions(permission_id)
+);
+
+comment on column permissions.code is 'Stable identifier checked by authorization guards (e.g. products:create)';
+comment on index uq_permissions_code is 'Enforces one row per permission code and speeds up lookup by code';
+comment on index roles_permissions_pkey is 'Composite PK (role_id, permission_id): a role holds a permission at most once; its index also serves listing permissions by role_id';

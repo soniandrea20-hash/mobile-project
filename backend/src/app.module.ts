@@ -4,6 +4,7 @@ import { UsersModule } from './users/users.module';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { TenantsModule } from './tenants/tenants.module';
+import { RolesModule } from './roles/roles.module';
 
 @Module({
   imports: [ 
@@ -31,7 +32,8 @@ import { TenantsModule } from './tenants/tenants.module';
     }),
     AuthModule, 
     UsersModule,
-    TenantsModule
+    TenantsModule,
+    RolesModule
   ],
   controllers: [],
   providers: [],
