@@ -762,3 +762,16 @@ Manual (`npm run db:apply` from `backend/`):
 - Run twice: second run applies 0 and skips all.
 - Edit an applied script: run fails naming it, nothing applied.
 - Failing script: rolled back, no `schema_versions` row for it.
+
+### R1 schema and dev seed (#78)
+
+Manual (`npm run db:apply` from `backend/`; seed run by hand):
+- Fresh DB: applies `001` and `002_mostrador_r1`; all R1 tables, indexes and comments exist.
+- DB with legacy `tenants`/`stores` rows: `slug` is backfilled (`tenant-<id8>`, `store-<id8>`) and `NOT NULL` holds.
+- Run twice: second run applies 0 and skips all; no row counts change (roles 3, permissions 19, roles_permissions 24).
+- Every new table, important column and index has a `COMMENT` (query `obj_description` for indexes and tables).
+- Constraints reject: invalid or reserved slug, malformed `whatsapp_number`, `price <= 0`, `quantity` outside 1 to 50, oversized `content_items.size_bytes`, duplicate category name per store (case-insensitive), duplicate `order_number` per tenant.
+- `order_items.line_total` equals `unit_price * quantity`; deleting a product sets `order_items.product_id` to NULL; deleting a category with products fails.
+- Seed (`psql -f database/seeds/dev_local1.sql`, or any SQL client): creates tenant `local1`, store `palermo`, owner `owner@local1.test`, 3 categories and 5 products; running it twice creates no duplicates.
+- Seeded owner logs in with the documented dev password.
+- `synchronize` is `false` in `backend/src/app.module.ts`.
