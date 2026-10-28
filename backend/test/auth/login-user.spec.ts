@@ -105,4 +105,17 @@ describe('LoginUserUseCase', () => {
         })
     ).rejects.toThrow(UnauthorizedException)
   });
+
+  it.each([
+    ['el email no existe', null, false],
+    ['el usuario esta inactivo', { user_id: 'user-1', password_hash: 'h', is_active: false }, true],
+    ['la contraseña es incorrecta', { user_id: 'user-1', password_hash: 'h', is_active: true }, false],
+  ])('responde el mismo mensaje cuando %s', async (_, user, passwordOk) => {
+    usersRepository.getByEmailWithPassword.mockResolvedValue(user);
+    passwordHasher.compare.mockResolvedValue(passwordOk);
+
+    await expect(
+      useCase.execute({ email: 'test@test.com', password: 'x' })
+    ).rejects.toThrow(new UnauthorizedException('Las credenciales no son correctas'));
+  });
 });

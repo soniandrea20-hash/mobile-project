@@ -721,6 +721,11 @@ Manual:
 - Unknown role id returns 404 once an HTTP controller exposes the use cases.
 - Duplicate `permissions.code` or duplicate `(role_id, permission_id)` is rejected.
 
+### Login uniform 401 (BU-021, TC-017)
+
+Automated (`backend/test/auth/login-user.spec.ts`):
+- Unknown email, inactive user and wrong password all throw 401 `Las credenciales no son correctas`.
+
 ### JWT auth guard (BU-021)
 
 Automated (`backend/test/auth/jwt-auth.guard.spec.ts`):

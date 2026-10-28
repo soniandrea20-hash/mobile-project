@@ -127,7 +127,7 @@ Implementada en `backend/src/auth/api/auth.controller.ts`. Rutas `@Public()`. No
 ```
 
 - Payload del JWT (`JwtTokenService`): `{ "sub": "<user_id>", "email": "<email>", "iat": …, "exp": … }`. **No contiene tenant ni permisos**: el tenant sale del Host y los permisos se leen de la base en cada solicitud (`PermissionsGuard`). Expiración: `JWT_EXPIRE_SECONDS`.
-- Errores: 400 validación; 401 `El email {email} no se encuentra registrado` (usuario inexistente o inactivo); 401 `Las credenciales no son correctas` (contraseña incorrecta). Ver diferencia con RF-005 en la sección 15.
+- Errores: 400 validación; 401 `Las credenciales no son correctas` para usuario inexistente, inactivo o contraseña incorrecta (RF-005).
 - El cliente envía luego `Authorization: Bearer <access_token>` en todo el backoffice.
 
 ## 3. Backoffice: sesión
@@ -660,7 +660,7 @@ Para que las tres pistas las resuelvan de forma explícita:
 
 | # | Hallazgo | Acción |
 | --- | --- | --- |
-| 1 | `LoginUseCase` distingue "El email … no se encuentra registrado" de "Las credenciales no son correctas"; RF-005 pide una respuesta uniforme. | Backend unifica ambos casos en 401 `Las credenciales no son correctas`. Hasta entonces el contrato es el de la sección 2. |
+| 1 | `LoginUseCase` distingue "El email … no se encuentra registrado" de "Las credenciales no son correctas"; RF-005 pide una respuesta uniforme. | Backend unifica ambos casos en 401 `Las credenciales no son correctas`. **Hecho (#21).** |
 | 2 | No existe contexto de tenant: ni middleware, ni columna `slug`, ni el JWT lleva tenant. | Backend agrega `TenantMiddleware` (Host o `X-Tenant-Slug`, sección 1.2), un guard de pertenencia a `users_tenants` y exige `tenant_id` en los repositorios. **Avance (#69):** `TenantMiddleware` hecho; falta el guard de pertenencia y `tenant_id` en los repositorios. |
 | 3 | ~~`TenantOrmEntity` mapea `name` como `varchar(320) unique`, mientras `database/scripts/001_initial_schema.sql` define `VARCHAR(150)` sin UNIQUE.~~ | **Resuelto (#69):** `name` es `varchar(150)` sin UNIQUE y el ORM entity agrega `slug` y `last_order_number`. |
 | 4 | `PermissionsGuard` obtiene los permisos desde `users_roles` (global), mientras `users_tenants` también guarda `role_id` por tenant. | En R1 un usuario pertenece a un solo tenant, el resultado es el mismo. Con varios tenants (R2) los permisos deben salir de `users_tenants.role_id`. |

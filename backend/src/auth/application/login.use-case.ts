@@ -22,7 +22,7 @@ export class LoginUseCase {
     async execute(dto: LoginCommand){
         const userExists = await this.usersRepository.getByEmailWithPassword(dto.email);
         if (userExists == null || !userExists.is_active){
-            throw new UnauthorizedException(`El email ${dto.email} no se encuentra registrado`);
+            throw new UnauthorizedException(`Las credenciales no son correctas`);
         }
 
         if(await this.passwordHasher.compare(dto.password, userExists.password_hash)){
