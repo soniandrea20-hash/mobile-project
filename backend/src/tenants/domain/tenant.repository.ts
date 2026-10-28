@@ -28,4 +28,6 @@ export interface ITenantRepository{
     getByName(name:string):Promise<Tenant | null>;
     findBySlug(slug:string):Promise<Tenant | null>;
     isActiveMember(tenantId:string, userId:string):Promise<boolean>;
+    isStoreOfTenant(tenantId:string, storeId:string):Promise<boolean>;
+    findActiveStoreBySlug(tenantId:string, slug:string):Promise<{ store_id:string; name:string; slug:string } | null>;
 }

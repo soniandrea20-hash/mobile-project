@@ -442,10 +442,10 @@ La columna Release (R1 o R2) coincide con la del xlsx de requerimientos. Nota: R
 | HU-05 / RF-007 | Roles y permisos desde la base | R1 | Acción sin permiso (HU-05) | TC-023, TC-025, TC-136, TC-137 | Funcional feliz, Negativa, Estrés, Seguridad | TC-136 | TC-023 | TC-137 | Pendiente | — | — |
 | HU-05 / RF-008 | Gestión de empleados | R2 | Alta de empleado; local no asignado (HU-05) | TC-022, TC-024, TC-138 | Funcional feliz, Negativa, Estrés | TC-022 | TC-024 | TC-138 | Pendiente | — | — |
 | HU-04 / RF-009 | Login del backoffice | R1 | Credenciales válidas; token vencido redirige al login (HU-04) | TC-018, TC-021, TC-101, TC-139 | Funcional feliz, Negativa, Estrés | TC-021, TC-101 | TC-018 | TC-139 | Pendiente | — | — |
-| HU-06 / RF-010 | Categorías del catálogo | R1 | Crear categoría; eliminar con productos; nombre repetido (HU-06) | TC-026, TC-027, TC-028, TC-029, TC-140 | Funcional feliz, Negativa, Estrés | TC-026, TC-029 | TC-027, TC-028 | TC-140 | Pendiente | — | — |
-| HU-07 / RF-011 | Alta y edición de productos | R1 | Producto válido; precio inválido (HU-07) | TC-030, TC-031, TC-032, TC-141 | Funcional feliz, Negativa, Estrés, Límite | TC-030 | TC-031 | TC-141 | Pendiente | — | — |
-| HU-07 / RF-012 | Imagen de producto | R1 | Imagen demasiado grande; imagen en el límite (HU-07) | TC-030, TC-033, TC-034, TC-035, TC-036, TC-037, TC-142 | Funcional feliz, Negativa, Estrés, Límite | TC-030, TC-036, TC-037 | TC-033, TC-035 | TC-142 | Pendiente | — | — |
-| HU-08 / RF-013 | Disponibilidad de producto | R1 | Desactivar producto; producto inactivo en carrito abierto (HU-08) | TC-038, TC-039, TC-143 | Funcional feliz, Negativa, Estrés | TC-038 | TC-039 | TC-143 | Pendiente | — | — |
+| HU-06 / RF-010 | Categorías del catálogo | R1 | Crear categoría; eliminar con productos; nombre repetido (HU-06) | TC-026, TC-027, TC-028, TC-029, TC-140 | Funcional feliz, Negativa, Estrés | TC-026, TC-029 | TC-027, TC-028 | TC-140 | Parcial: lógica de casos de uso cubierta con Jest (mocks); supertest pendiente | — | — |
+| HU-07 / RF-011 | Alta y edición de productos | R1 | Producto válido; precio inválido (HU-07) | TC-030, TC-031, TC-032, TC-141 | Funcional feliz, Negativa, Estrés, Límite | TC-030 | TC-031 | TC-141 | Parcial: TC-031 y TC-032 (precio) cubiertos con Jest en casos de uso (mocks); supertest pendiente | — | — |
+| HU-07 / RF-012 | Imagen de producto | R1 | Imagen demasiado grande; imagen en el límite (HU-07) | TC-030, TC-033, TC-034, TC-035, TC-036, TC-037, TC-142 | Funcional feliz, Negativa, Estrés, Límite | TC-030, TC-036, TC-037 | TC-033, TC-035 | TC-142 | Parcial: TC-033, TC-034 (límite exacto de 5 MB con supertest sobre un controlador de prueba), TC-035 (magic bytes) y TC-036 (sharp real) cubiertos con Jest; el endpoint completo con base y supertest sigue pendiente; TC-037 (cámara) manual; TC-142 (k6) pendiente | — | — |
+| HU-08 / RF-013 | Disponibilidad de producto | R1 | Desactivar producto; producto inactivo en carrito abierto (HU-08) | TC-038, TC-039, TC-143 | Funcional feliz, Negativa, Estrés | TC-038 | TC-039 | TC-143 | Parcial: PATCH de disponibilidad y filtro is_available cubiertos con Jest (mocks); catálogo público cubierto con Jest en caso de uso (mocks, TC-038 parcial); supertest pendiente | — | — |
 | HU-09 / RF-014 | Catálogo público por local | R1 | Catálogo disponible; catálogo vacío; otro tenant (HU-09) | TC-040, TC-041, TC-042, TC-144 | Funcional feliz, Negativa, Estrés, Seguridad | TC-040 | TC-041 | TC-144 | Pendiente | — | — |
 | HU-10 / RF-015 | Subida de foto del menú | R2 | Foto legible; foto demasiado grande (HU-10) | TC-043, TC-047, TC-048, TC-145 | Funcional feliz, Negativa, Estrés, Límite | TC-043 | TC-047 | TC-145 | Pendiente | — | — |
 | HU-10 / RF-016 | Extracción de productos con LLM | R2 | Foto sin productos; respuesta inválida del modelo (HU-10) | TC-043, TC-044, TC-045, TC-046, TC-146 | Funcional feliz, Negativa, Estrés | TC-043 | TC-044, TC-045, TC-046 | TC-146 | Pendiente | — | — |
@@ -708,6 +708,16 @@ El curso lista siete atributos; se agrega Compatibilidad porque el proyecto tien
 
 Contenido previo de este documento (pruebas del backend ya escritas para roles, guard JWT y guard de permisos), conservado tal cual; solo se bajó un nivel de encabezado.
 
+### Imagen de producto (#51, RF-012)
+
+Automated (`backend/test/products`):
+- `image-type.spec.ts`: magic bytes JPG, PNG y WebP; GIF, exe renombrado, RIFF no WebP y buffers cortos devuelven null; límite 5 242 880 (TC-035).
+- `product-image.use-cases.spec.ts`: 415 `UNSUPPORTED_MEDIA_TYPE`, 422 `MEDIA_UNREADABLE`, 404; orden escribir nuevo, actualizar base, borrar viejo; el archivo nuevo se borra si falla la base; quitar imagen; borrar producto borra el archivo.
+- `local-image-storage.spec.ts`: sharp real en un directorio temporal; PNG de 4000 px queda en 1280 px o menos (TC-036), una imagen de 200 px no se agranda, bytes corruptos dan 422 sin dejar archivos.
+- `media-http.spec.ts`: supertest con app Nest mínima; 5 242 880 bytes aceptado y 5 242 881 da 413 con `code: MEDIA_TOO_LARGE` (TC-033, TC-034); `GET /media/*` responde con `Cache-Control: public, max-age=31536000, immutable` aunque un middleware rechace toda ruta (sin tenant), 404 si no existe, sin listado de directorios ni path traversal.
+
+Pending: supertest del endpoint real `PUT/DELETE /products/:id/image` con base (403 sin permiso, 404 de otro tenant, 400 sin `file`); TC-037 manual en Android físico; TC-142 (k6).
+
 ### Roles (BU-021)
 
 Automated (`backend/test/roles`; from `backend/` run `npx jest --rootDir . --modulePaths "<rootDir>"`):
@@ -768,6 +778,57 @@ Manual:
 - `users_tenants` row with `is_active = false`: 403 `NOT_A_MEMBER`.
 - Active member: request reaches the handler.
 - Public routes are unaffected.
+
+### Categories (#51, RF-010)
+
+Automated (`backend/test/categories/categories.use-cases.spec.ts`, mocked repositories):
+- List and create: 404 `STORE_NOT_FOUND` when the store is not in the tenant (no repository call); queries are scoped by `tenant_id`.
+- Create: `sort_order` defaults to 0, the name is trimmed, a duplicate name gives 409 `CATEGORY_NAME_TAKEN` (TC-028 logic).
+- Update: scoped by tenant, trims the name, 404 `CATEGORY_NOT_FOUND` for a missing or other-tenant id, 409 `CATEGORY_NAME_TAKEN`.
+- Delete: 404 `CATEGORY_NOT_FOUND`, 409 `CATEGORY_HAS_PRODUCTS` (TC-027 logic).
+
+Manual (backend running with the dev seed, owner token of `local1`):
+- `POST /categories` with name `"  Bebidas "` and no `sort_order`: 201, `name` trimmed, `sort_order` 0.
+- Same name in another case in the same store: 409 `CATEGORY_NAME_TAKEN`; same name in another store: 201.
+- `GET /categories?store_id=<uuid>`: ordered by `sort_order`, `name`; store of another tenant: 404 `STORE_NOT_FOUND`; missing or non-UUID `store_id`: 400.
+- `PATCH`/`DELETE` with a category id of another tenant: 404; non-UUID id: 400; delete with products: 409 `CATEGORY_HAS_PRODUCTS`.
+- Employee token: 403 on POST, PATCH and DELETE.
+- Supertest cases TC-026..TC-029 stay pending (no e2e harness with a test DB yet); the pg error mapping (23505, 23503) is only verified manually.
+
+### Products (#51, RF-011/RF-013)
+
+Automated (`backend/test/products/products.use-cases.spec.ts`, mocked repositories):
+- List: 404 `STORE_NOT_FOUND` (no repository call); filters passed scoped by tenant; `is_available` query transform maps `"false"` to `false` and `"true"` to `true`.
+- Get: 404 `PRODUCT_NOT_FOUND` for a missing or other-tenant id.
+- Create: 404 `STORE_NOT_FOUND`; 404 `CATEGORY_NOT_FOUND` when the category belongs to another store; price `0`, `0.00`, `0.0`, `-1` rejected with 400, `0.01` accepted (TC-031/TC-032 price logic); defaults (`is_available` true, `sort_order` 0, `description` null, name trimmed); 422 `PRODUCT_LIMIT_REACHED` at 200 products, 199 accepted.
+- Update: 400 with no fields; price 0 rejected; undefined keys are not forwarded; `description: null` is forwarded; 404 `PRODUCT_NOT_FOUND`; changing `category_id` validates the category against the product's store.
+- Delete: 404 `PRODUCT_NOT_FOUND`; returns `image_path` for later file cleanup (T4).
+- Response: `image_path` maps to `image_url` (`/media/<path>` or `null`) and is not exposed.
+
+Manual (backend running with the dev seed, owner token of `local1`):
+- `POST /products` with `price: "1500"`: 201, `price` returned as `"1500.00"`, `image_url` null, `is_available` true.
+- `price` `"0"`, `"0.00"`, `"10.999"`, `""`: 400. Category of another store or tenant: 404 `CATEGORY_NOT_FOUND`.
+- `GET /products?store_id=<uuid>&is_available=false`: only unavailable products, ordered by `sort_order`, `name`; missing `store_id`: 400.
+- `PATCH` with `{}`: 400; `{ "is_available": false }` updates only that field and `updated_at`; `{ "description": null }` clears it.
+- `DELETE` returns 204; a second `DELETE` returns 404; product ids of another tenant: 404.
+- 201st product in a store: 422 `PRODUCT_LIMIT_REACHED`.
+- Employee token: 403 on POST, PATCH and DELETE.
+- Supertest cases (TC-030, TC-038) stay pending (no e2e harness with a test DB yet); NUMERIC to string formatting and the count-then-insert limit race are only verified manually.
+
+### Public catalog (#51, RF-013/RF-014)
+
+Automated (`backend/test/products/get-public-catalog.use-case.spec.ts`, mocked repositories):
+- 404 `STORE_NOT_FOUND` when the store lookup by slug returns `null` (missing, inactive or other-tenant store); no catalog query is made.
+- Store and catalog are looked up with the tenant id; `is_available = true` filtering, ordering and omission of empty categories are done in SQL (not covered by Jest).
+- Empty catalog returns `categories: []`.
+- Lines are grouped by category keeping the received order.
+- Product shape: `product_id`, `name`, `description` (null kept), `price`, `image_url` (`/media/<path>` or `null`); no `store_id` or `is_available`.
+
+Manual (backend running with the dev seed, `X-Tenant-Slug: local1`, no token):
+- `GET /public/stores/<slug>/catalog`: 200; only available products; categories by `sort_order`, `name`; a category with all products unavailable is absent.
+- Unknown slug, deactivated store, or slug of another tenant: 404 `STORE_NOT_FOUND`. Unknown tenant: 404 `TENANT_NOT_FOUND`.
+- Set a product `is_available=false` via PATCH, then repeat the GET: it is gone (TC-038).
+- Supertest cases (TC-038, TC-040..TC-042) stay pending (no e2e harness with a test DB yet); the SQL ordering and filtering are only verified manually.
 
 ### SQL versioning (BU-018)
 

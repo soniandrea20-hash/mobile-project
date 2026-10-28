@@ -95,5 +95,19 @@ export class PostgreTenantRepository implements ITenantRepository{
         );
         return rows.length > 0;
     }
-    
+    async isStoreOfTenant(tenantId: string, storeId: string): Promise<boolean> {
+        const rows = await this.tenantDb.manager.query(
+            'SELECT 1 FROM stores WHERE store_id = $1 AND tenant_id = $2 LIMIT 1',
+            [storeId, tenantId],
+        );
+        return rows.length > 0;
+    }
+    async findActiveStoreBySlug(tenantId: string, slug: string): Promise<{ store_id: string; name: string; slug: string } | null> {
+        const rows = await this.tenantDb.manager.query(
+            "SELECT store_id, name, slug FROM stores WHERE tenant_id = $1 AND slug = $2 AND is_active = true LIMIT 1",
+            [tenantId, slug],
+        );
+        return rows[0] ?? null;
+    }
+
 }
