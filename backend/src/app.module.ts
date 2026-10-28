@@ -5,6 +5,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { TenantsModule } from './tenants/tenants.module';
 import { RolesModule } from './roles/roles.module';
+import { ProductsModule } from './products/products.module';
 
 @Module({
   imports: [ 
@@ -33,7 +34,8 @@ import { RolesModule } from './roles/roles.module';
     AuthModule, 
     UsersModule,
     TenantsModule,
-    RolesModule
+    RolesModule,
+    ProductsModule
   ],
   controllers: [],
   providers: [],
