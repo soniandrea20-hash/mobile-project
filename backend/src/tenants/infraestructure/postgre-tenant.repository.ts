@@ -18,6 +18,7 @@ export class PostgreTenantRepository implements ITenantRepository{
         return {
             tenant_id: saved.tenant_id,
             name: saved.name,
+            slug: saved.slug,
             is_active: saved.is_active
         }
     }
@@ -37,6 +38,7 @@ export class PostgreTenantRepository implements ITenantRepository{
         return {
             tenant_id: saved.tenant_id,
             name: saved.name,
+            slug: saved.slug,
             is_active: saved.is_active
         }
     }
@@ -79,8 +81,12 @@ export class PostgreTenantRepository implements ITenantRepository{
         return {
             tenant_id: tenant.tenant_id,
             name: tenant.name,
+            slug: tenant.slug,
             is_active: tenant.is_active
         }
+    }
+    async findBySlug(slug:string): Promise<Tenant | null> {
+        return this.tenantDb.findOne({ where: { slug } });
     }
     
 }

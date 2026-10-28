@@ -775,3 +775,21 @@ Manual (`npm run db:apply` from `backend/`; seed run by hand):
 - Seed (`psql -f database/seeds/dev_local1.sql`, or any SQL client): creates tenant `local1`, store `palermo`, owner `owner@local1.test`, 3 categories and 5 products; running it twice creates no duplicates.
 - Seeded owner logs in with the documented dev password.
 - `synchronize` is `false` in `backend/src/app.module.ts`.
+
+### Tenant resolution (#69, RF-001, RF-002)
+
+Automated (`backend/test/tenants`):
+- `tenant-slug.spec.ts`: `extractSlugFromHost` gives the slug for `local1.localhost` (with port) and `local1.mostrador.io`, case-insensitive; `null` for the bare domain, IPs, foreign hosts and nested subdomains. `isValidSlug` accepts 3 to 30 chars in lowercase, digits and hyphen; rejects 2 and 31 chars, uppercase, `_`, leading or trailing hyphen, and `www`, `api`, `app`, `admin` (TC-004, TC-010).
+- `tenant.middleware.spec.ts` (mocked repository): resolves the tenant from Host and sets `req.tenant` (TC-008); uses `X-Tenant-Slug` only when Host gives no slug; ignores the header when Host has a slug; 404 `TENANT_NOT_FOUND` without a lookup for a missing, invalid or reserved slug (TC-010); 404 for an unknown or inactive tenant (TC-009).
+
+Manual (backend running with `BASE_DOMAIN=localhost` and the dev seed):
+- `curl -H "Host: local1.localhost:3000" /products`: reaches the handler.
+- `curl -H "Host: nope.localhost:3000" /products`: 404 with `code: "TENANT_NOT_FOUND"` in the default Nest error format.
+- `curl -H "X-Tenant-Slug: local1" http://127.0.0.1:3000/products`: reaches the handler; with `Host: local1.localhost` and `X-Tenant-Slug: other` the Host wins.
+- Tenant with `is_active = false`: 404 `TENANT_NOT_FOUND`.
+- `POST /auth/login` without a tenant: not gated (`/auth/*` is excluded).
+- CORS preflight (`OPTIONS` with `Origin: http://local1.localhost:8081` and `https://local1.mostrador.io`): allowed, with `X-Tenant-Slug` in the allowed headers; `Origin: https://evil.com` gets no `Access-Control-Allow-Origin`; `ETag` is exposed.
+- `BASE_DOMAIN=mostrador.io`: `Host: local1.mostrador.io` resolves; `local1.localhost` falls to the header.
+- Non-functional: with the unique index `uq_tenants_slug` the lookup is one indexed query per request; load case TC-130 (k6) stays pending until the stores endpoints exist.
+- Known gap: `POST /tenants` style creation does not set `slug` yet (NOT NULL in DB); covered by the tenant admin card.
+

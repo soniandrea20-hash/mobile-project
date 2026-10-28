@@ -13,7 +13,13 @@ async function bootstrap() {
   )
 
   app.enableCors({
-    origin: 'http://localhost:8081',
+    origin: [
+      'http://localhost:8081',
+      /^https?:\/\/[a-z0-9-]+\.localhost(:\d+)?$/,
+      /^https:\/\/[a-z0-9-]+\.mostrador\.io$/,
+    ],
+    allowedHeaders: ['Authorization', 'Content-Type', 'X-Tenant-Slug', 'If-None-Match'],
+    exposedHeaders: ['ETag'],
   });
 
   await app.listen(process.env.PORT ?? 3000);

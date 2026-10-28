@@ -9,6 +9,7 @@ export interface CreateTenantData {
 export interface ResponseTenantData {
     tenant_id:string;
     name: string;
+    slug: string;
     is_active: boolean;
 }
 
@@ -25,4 +26,5 @@ export interface ITenantRepository{
     getAll():Promise<Tenant[]>;
     getById(id:string):Promise<Tenant | null>;
     getByName(name:string):Promise<Tenant | null>;
+    findBySlug(slug:string):Promise<Tenant | null>;
 }
