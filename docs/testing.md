@@ -754,6 +754,21 @@ Manual:
 - Permission revoked in DB takes effect on the next request without re-login.
 - Route without `@RequirePermissions` only needs a valid token.
 
+### Membership guard (BU-021, RNF-012)
+
+Automated (`backend/test/tenants/membership.guard.spec.ts`):
+- `@Public()` route is allowed without querying the DB.
+- Missing `request.user` throws `ForbiddenException` with code `NOT_A_MEMBER`.
+- Missing `request.tenant` throws `ForbiddenException` with code `NOT_A_MEMBER`.
+- Non-member (repository returns false) throws `NOT_A_MEMBER`; repository called with `(tenant_id, sub)`.
+- Active member returns true.
+
+Manual:
+- Token of a `local1` user sent with Host `local2`: 403 `NOT_A_MEMBER` (TC-122).
+- `users_tenants` row with `is_active = false`: 403 `NOT_A_MEMBER`.
+- Active member: request reaches the handler.
+- Public routes are unaffected.
+
 ### SQL versioning (BU-018)
 
 Automated (`backend/test/db/plan-scripts.spec.ts`):

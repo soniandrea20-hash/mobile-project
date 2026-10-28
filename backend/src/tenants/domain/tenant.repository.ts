@@ -27,4 +27,5 @@ export interface ITenantRepository{
     getById(id:string):Promise<Tenant | null>;
     getByName(name:string):Promise<Tenant | null>;
     findBySlug(slug:string):Promise<Tenant | null>;
+    isActiveMember(tenantId:string, userId:string):Promise<boolean>;
 }

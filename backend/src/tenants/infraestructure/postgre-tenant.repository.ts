@@ -88,5 +88,12 @@ export class PostgreTenantRepository implements ITenantRepository{
     async findBySlug(slug:string): Promise<Tenant | null> {
         return this.tenantDb.findOne({ where: { slug } });
     }
+    async isActiveMember(tenantId: string, userId: string): Promise<boolean> {
+        const rows = await this.tenantDb.manager.query(
+            'SELECT 1 FROM users_tenants WHERE tenant_id = $1 AND user_id = $2 AND is_active = true LIMIT 1',
+            [tenantId, userId],
+        );
+        return rows.length > 0;
+    }
     
 }
