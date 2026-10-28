@@ -57,6 +57,14 @@ $ npm run test:e2e
 $ npm run test:cov
 ```
 
+## Database
+
+SQL scripts live in `database/scripts` and are named `NNN_description.sql`.
+
+- Every script must be idempotent.
+- Never edit an applied script (the runner fails on a changed checksum); add a new one instead.
+- Apply pending scripts with `npm run db:apply` (reads `DB_*` from `backend/.env`). Applied versions are recorded in `schema_versions`.
+
 ## Deployment
 
 When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.

@@ -8,7 +8,7 @@ Automated (`backend/test/roles`; from `backend/` run `npx jest --rootDir . --mod
 - `get-role-permissions.spec.ts`: returns role permissions, `[]` when none, `NotFoundException` for an unknown role (without querying permissions), deduplicates by `permission_id`.
 
 Manual:
-- Apply `database/schema.sql` twice: no errors (idempotent), comments re-applied.
+- Apply `database/scripts/001_initial_schema.sql` twice: no errors (idempotent), comments re-applied.
 - Role with no rows in `roles_permissions` returns `[]` from `getPermissionsByRoleId`.
 - Unknown role id returns 404 once an HTTP controller exposes the use cases.
 - Duplicate `permissions.code` or duplicate `(role_id, permission_id)` is rejected.
@@ -40,3 +40,17 @@ Manual:
 - User with the required permission: 200.
 - Permission revoked in DB takes effect on the next request without re-login.
 - Route without `@RequirePermissions` only needs a valid token.
+
+## SQL versioning (BU-018)
+
+Automated (`backend/test/db/plan-scripts.spec.ts`):
+- Nothing applied: all versions, ascending (unsorted input).
+- Some applied: only pending ones; all applied: `[]`.
+- Checksum mismatch throws naming the version; applied version without a file throws.
+- `checksum()` returns a stable 64-char hex.
+
+Manual (`npm run db:apply` from `backend/`):
+- Fresh DB: applies `001_initial_schema`, creates `schema_versions`.
+- Run twice: second run applies 0 and skips all.
+- Edit an applied script: run fails naming it, nothing applied.
+- Failing script: rolled back, no `schema_versions` row for it.
