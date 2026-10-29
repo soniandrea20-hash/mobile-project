@@ -1,6 +1,7 @@
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { CreateScreenUseCase } from 'src/screens/application/create-screen.use-case';
 import { ListScreensUseCase } from 'src/screens/application/list-screens.use-case';
+import { UpdateScreenUseCase } from 'src/screens/application/update-screen.use-case';
 
 const expectCode = async (promise: Promise<unknown>, type: any, code: string) => {
   const error: any = await promise.catch((e) => e);
@@ -10,7 +11,7 @@ const expectCode = async (promise: Promise<unknown>, type: any, code: string) =>
 
 describe('Screens use cases', () => {
   const tenant = { tenant_id: 't1', slug: 'local1' } as any;
-  const screenRepository = { create: jest.fn(), listByStore: jest.fn() };
+  const screenRepository = { create: jest.fn(), listByStore: jest.fn(), update: jest.fn() };
   const tenantRepository = { isStoreOfTenant: jest.fn() };
   const row = (over: object = {}) => ({
     screen_id: 'sc1', store_id: 's1', name: 'Entrada', is_active: true,
@@ -77,6 +78,40 @@ describe('Screens use cases', () => {
         'http://local1.localhost:8081/screen/def',
       ]);
       expect(result[1].is_active).toBe(false);
+    });
+  });
+
+  describe('UpdateScreenUseCase', () => {
+    const useCase = () => new UpdateScreenUseCase(screenRepository as any);
+
+    it('debe fallar con EMPTY_UPDATE sin campos, sin tocar el repositorio', async () => {
+      await expectCode(useCase().execute(tenant, 'sc1', {}), BadRequestException, 'EMPTY_UPDATE');
+      expect(screenRepository.update).not.toHaveBeenCalled();
+    });
+
+    it('debe fallar con SCREEN_NOT_FOUND si la pantalla no es del tenant', async () => {
+      screenRepository.update.mockResolvedValue(null);
+
+      await expectCode(useCase().execute(tenant, 'otra', { is_active: false }), NotFoundException, 'SCREEN_NOT_FOUND');
+      expect(screenRepository.update).toHaveBeenCalledWith('t1', 'otra', { is_active: false });
+    });
+
+    it('debe guardar solo los campos enviados, con el nombre sin espacios, y devolver player_url', async () => {
+      screenRepository.update.mockResolvedValue(row({ token: 'abc', name: 'Salida' }));
+
+      const screen = await useCase().execute(tenant, 'sc1', { name: '  Salida  ' });
+
+      expect(screenRepository.update).toHaveBeenCalledWith('t1', 'sc1', { name: 'Salida' });
+      expect(screen.player_url).toBe('http://local1.localhost:8081/screen/abc');
+    });
+
+    it('debe permitir desactivar la pantalla', async () => {
+      screenRepository.update.mockResolvedValue(row({ token: 'abc', is_active: false }));
+
+      const screen = await useCase().execute(tenant, 'sc1', { is_active: false });
+
+      expect(screenRepository.update).toHaveBeenCalledWith('t1', 'sc1', { is_active: false });
+      expect(screen.is_active).toBe(false);
     });
   });
 });

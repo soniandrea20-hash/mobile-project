@@ -1,7 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { InjectDataSource } from "@nestjs/typeorm";
 import { DataSource } from "typeorm";
-import { IScreenRepository, NewScreen, PlayerScreen, ScreenRow } from "../domain/screen.repository";
+import { IScreenRepository, NewScreen, PlayerScreen, ScreenPatch, ScreenRow } from "../domain/screen.repository";
 
 const COLUMNS = 'screen_id, store_id, name, token, is_active, created_at, updated_at';
 
@@ -23,6 +23,17 @@ export class PostgreScreenRepository implements IScreenRepository {
             `SELECT ${COLUMNS} FROM screens WHERE tenant_id = $1 AND store_id = $2 ORDER BY created_at`,
             [tenantId, storeId],
         );
+    }
+
+    async update(tenantId: string, screenId: string, patch: ScreenPatch): Promise<ScreenRow | null> {
+        const fields = (['name', 'is_active'] as const).filter((field) => patch[field] !== undefined);
+        const sets = fields.map((field, i) => `${field} = $${i + 3}`).join(', ');
+        // pg returns [rows, affectedCount] for UPDATE
+        const [rows] = await this.dataSource.query(
+            `UPDATE screens SET ${sets}, updated_at = now() WHERE tenant_id = $1 AND screen_id = $2 RETURNING ${COLUMNS}`,
+            [tenantId, screenId, ...fields.map((field) => patch[field])],
+        );
+        return rows[0] ?? null;
     }
 
     async findPlayerScreen(tenantId: string, token: string): Promise<PlayerScreen | null> {

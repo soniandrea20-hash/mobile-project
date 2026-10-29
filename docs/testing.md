@@ -721,8 +721,11 @@ Pending: supertest con base para el orden por fecha, los filtros en SQL, la pagi
 Automated (`backend/test/screens/screens.use-cases.spec.ts`):
 - Alta: `STORE_NOT_FOUND` si el local no es del tenant (sin insertar); token base64url de 43 caracteres y `player_url` con el slug del tenant (`WEB_ORIGIN_TEMPLATE`); dos altas generan tokens distintos; el nombre se guarda sin espacios en los extremos (TC-059).
 - Listado: `STORE_NOT_FOUND`; consulta al repositorio con `tenant_id` y `store_id`; cada pantalla incluye `player_url` e incluye las inactivas.
+- Edición: 400 `EMPTY_UPDATE` sin campos (sin tocar el repositorio); 404 `SCREEN_NOT_FOUND` si la pantalla no es del tenant; guarda solo los campos enviados con el nombre sin espacios; desactivar con `is_active: false`; la respuesta incluye `player_url`.
 
-Pending: supertest con base para el aislamiento por tenant, el orden por `created_at`, los 400 de validación (`store_id` no UUID, nombre vacío o de más de 80) y el 403 sin permiso; que la URL abra el reproductor (TC-059, depende del reproductor); TC-060 y TC-151 (R2).
+Manual (contra la base): `PATCH /screens/:id` con `{"is_active": false}` da 200 y luego `GET /player/:token/playlist` da 404 `SCREEN_NOT_FOUND`; reactivarla vuelve a dar 200; `{}` da 400 `EMPTY_UPDATE`; el id de una pantalla de `local1` con el token de `local2` da 404; `updated_at` cambia tras la edición.
+
+Pending: supertest con base para el aislamiento por tenant, el orden por `created_at`, el `UPDATE` parcial en SQL, los 400 de `name` (vacío o de más de 80) e `is_active` no booleano, `screenId` no UUID, los 400 de validación (`store_id` no UUID, nombre vacío o de más de 80) y el 403 sin permiso; que la URL abra el reproductor (TC-059, depende del reproductor); TC-060 y TC-151 (R2).
 
 ### Contenido de pantalla (#70, RF-018, RF-019)
 
