@@ -7,7 +7,7 @@ export class MediaTooLargeFilter implements ExceptionFilter {
     catch(_exception: PayloadTooLargeException, host: ArgumentsHost) {
         host.switchToHttp().getResponse<Response>().status(413).json({
             statusCode: 413,
-            message: 'Image exceeds the 5 MB limit',
+            message: 'File exceeds the size limit',
             error: 'Payload Too Large',
             code: 'MEDIA_TOO_LARGE',
         });

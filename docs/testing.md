@@ -724,6 +724,22 @@ Automated (`backend/test/screens/screens.use-cases.spec.ts`):
 
 Pending: supertest con base para el aislamiento por tenant, el orden por `created_at`, los 400 de validación (`store_id` no UUID, nombre vacío o de más de 80) y el 403 sin permiso; que la URL abra el reproductor (TC-059, depende del reproductor); TC-060 y TC-151 (R2).
 
+### Contenido de pantalla (#70, RF-018, RF-019)
+
+Automated (`backend/test/content/content.use-cases.spec.ts`; la duración de video va detrás del puerto `IVideoProbe`, sin ffprobe en los tests):
+- Tipo por contenido real: JPG y MP4 reconocidos por magic bytes; un `.exe` renombrado da 415 `UNSUPPORTED_MEDIA_TYPE` sin guardar archivo (TC-053).
+- Alta de imagen: 5 242 880 bytes aceptado y 5 242 881 da 413 `MEDIA_TOO_LARGE`; duración por defecto 10 o `DEFAULT_IMAGE_SECONDS`; usa la duración enviada; se agrega con el archivo guardado y la `url` bajo `/media` (TC-052).
+- Alta de video: duración medida por el puerto; 60 s aceptado y 61 s da 422 `VIDEO_TOO_LONG` borrando el archivo (TC-055, TC-056); 52 428 800 bytes aceptado y 52 428 801 da 413 (TC-054, TC-055); lectura fallida da 422 `MEDIA_UNREADABLE` borrando el archivo; `duration_seconds` con un video da 422 sin guardar.
+- Alta: `STORE_NOT_FOUND`; el archivo se borra si falla el insert.
+- Listado: `STORE_NOT_FOUND`; consulta con `tenant_id` y `store_id`; incluye ocultos, sin `file_path`.
+- Edición: 400 `EMPTY_UPDATE`; 404 `CONTENT_NOT_FOUND` (otro tenant); 422 con duración en un video; ocultar un video; duración de una imagen.
+- Orden: `STORE_NOT_FOUND`; 422 si falta, sobra o es ajeno un contenido (sin tocar el repositorio); reasigna incluyendo ocultos y devuelve el nuevo orden (TC-058).
+- Borrado: 404 si no existe en el tenant; borra la fila y después el archivo.
+
+Manual (contra la base, `ffprobe` en el PATH): subir un MP4 real de 2,3 s y comprobar `duration_seconds: 3`; subir un archivo corrupto con extensión `.mp4` y comprobar 422 `MEDIA_UNREADABLE`; borrar un contenido intermedio y comprobar que los restantes quedan con `sort_order` consecutivo y que el archivo desapareció de `UPLOADS_DIR`; con el token de `local2`, `GET /content?store_id=` de un local de `local1` da 404 y `PATCH`/`DELETE` de un contenido de `local1` dan 404 (RNF-012).
+
+Pending: supertest con base para el aislamiento por tenant, el `INSERT ... max + 1`, la transacción de orden y de borrado, los 400 de validación (`store_id` o `contentId` no UUID, falta `file`, `duration_seconds` fuera de 3 a 60, `content_ids` vacío o repetido), el 403 sin permiso y el 413 real del video de 50 MB; TC-148 y TC-150 (k6); TC-058 (Playwright, depende del reproductor).
+
 ### Configuración del local (#79, RF-003, RF-004, RF-033)
 
 Automated (`backend/test/stores/stores.use-cases.spec.ts`):

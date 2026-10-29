@@ -10,6 +10,7 @@ import { CategoriesModule } from './categories/categories.module';
 import { OrdersModule } from './orders/orders.module';
 import { ScreensModule } from './screens/screens.module';
 import { StoresModule } from './stores/stores.module';
+import { ContentModule } from './content/content.module';
 import { TenantMiddleware } from './tenants/api/tenant.middleware';
 
 @Module({
@@ -45,6 +46,7 @@ import { TenantMiddleware } from './tenants/api/tenant.middleware';
     OrdersModule,
     ScreensModule,
     StoresModule,
+    ContentModule,
   ],
   controllers: [],
   providers: [],
