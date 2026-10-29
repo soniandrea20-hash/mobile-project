@@ -225,7 +225,7 @@ Los casos de estrés usan, salvo que se indique "meta propuesta", las metas de `
 | TC-056 | HU-12 | RF-018, RNF-005 | Video de 61 segundos | Contenido de pantalla abierto | video de 61 s y menos de 50 MB | 1. Subir el video | Rechazado por duración | Límite | Media | Sí (supertest) |
 | TC-057 | HU-12 | RF-019 | Duración mínima de una imagen | Imagen en la lista | duración 2 s y 3 s | 1. Fijar 2 s<br>2. Fijar 3 s | 2 s rechazado (mínimo 3 s); 3 s aceptado | Límite | Alta | Sí (Jest) |
 | TC-058 | HU-12 | RF-019 | Reordenar contenidos | Dos contenidos en la lista | orden A, B a B, A | 1. Cambiar el orden<br>2. Abrir el reproductor | El reproductor muestra B y luego A | Funcional feliz | Alta | Sí (Playwright) |
-| TC-059 | HU-13 | RF-020 | Crear pantalla y obtener URL | Sesión del dueño | pantalla "Entrada" | 1. Registrar la pantalla | URL /screen/<token> única; la URL abre el reproductor | Funcional feliz | Alta | Sí (supertest) |
+| TC-059 | HU-13 | RF-020 | Crear pantalla y obtener URL | Sesión del dueño | pantalla "Entrada" | 1. Registrar la pantalla | URL /screen/<token> única; la URL abre el reproductor. Jest: `screens.use-cases.spec.ts` cubre token de 43 caracteres, `player_url` y unicidad entre altas; que la URL abra el reproductor queda para el reproductor | Funcional feliz | Alta | Sí (Jest + supertest) |
 | TC-060 | HU-13 | RF-020 | Regenerar token | Pantalla Entrada registrada | token anterior | 1. Regenerar el token<br>2. Abrir la URL anterior | La URL anterior responde 404; la nueva funciona | Negativa | Alta | Sí (supertest) |
 | TC-061 | HU-14 | RF-021 | Reproducción en bucle | Pantalla con 3 contenidos | URL /screen/<token> | 1. Abrir la URL en pantalla completa<br>2. Esperar un ciclo | Se reproducen en orden y vuelve a empezar | Funcional feliz | Alta | Sí (Playwright) |
 | TC-062 | HU-14 | RF-022 | QR permanente | Reproductor en ejecución | cambio de contenido | 1. Observar el QR en dos contenidos distintos | El QR no desaparece y su URL abre el autopedido del local | Funcional feliz | Alta | Sí (Playwright) |
@@ -452,7 +452,7 @@ La columna Release (R1 o R2) coincide con la del xlsx de requerimientos. Nota: R
 | HU-11 / RF-017 | Revisión y confirmación de lo detectado | R2 | Confirmar con correcciones; descartar ítems; salir sin confirmar (HU-11) | TC-049, TC-050, TC-051, TC-147 | Funcional feliz, Negativa, Estrés | TC-049, TC-050 | TC-051 | TC-147 | Pendiente | — | — |
 | HU-12 / RF-018 | Carga de imágenes y videos | R1 | Subir imagen; formato no soportado; video excede el límite (HU-12) | TC-052, TC-053, TC-054, TC-055, TC-056, TC-148 | Funcional feliz, Negativa, Estrés, Límite | TC-052 | TC-053, TC-054 | TC-148 | Pendiente | — | — |
 | HU-12 / RF-019 | Orden y duración del contenido | R1 | Duración fuera de rango; reordenar (HU-12) | TC-057, TC-058, TC-149, TC-150 | Funcional feliz, Negativa, Estrés, Límite | TC-058 | TC-149 | TC-150 | Pendiente | — | — |
-| HU-13 / RF-020 | Alta de pantalla con token | R1 | Crear pantalla; regenerar token (HU-13) | TC-059, TC-060, TC-151 | Funcional feliz, Negativa, Estrés | TC-059 | TC-060 | TC-151 | Pendiente | — | — |
+| HU-13 / RF-020 | Alta de pantalla con token | R1 | Crear pantalla; regenerar token (HU-13) | TC-059, TC-060, TC-151 | Funcional feliz, Negativa, Estrés | TC-059 | TC-060 | TC-151 | Parcial: TC-059 cubierto con Jest en caso de uso (mocks); supertest pendiente | — | — |
 | HU-14 / RF-021 | Reproductor web en pantalla completa | R1 | Reproducción en bucle; token inválido; pantalla sin contenido (HU-14) | TC-061, TC-064, TC-065, TC-066, TC-152 | Funcional feliz, Negativa, Estrés, Límite, UI | TC-061 | TC-064 | TC-152 | Pendiente | — | — |
 | HU-14 / RF-022 | QR permanente en pantalla | R1 | QR permanente (HU-14) | TC-062, TC-063, TC-153, TC-154 | Funcional feliz, Negativa, Estrés | TC-062, TC-063 | TC-153 | TC-154 | Pendiente | — | — |
 | HU-15 / RF-023 | Actualización de contenido por consulta periódica | R1 | Contenido actualizado (HU-15) | TC-067, TC-068, TC-155, TC-156 | Funcional feliz, Negativa, Estrés | TC-067, TC-068 | TC-156 | TC-155 | Pendiente | — | — |
@@ -715,6 +715,14 @@ Automated (`backend/test/orders`):
 - `orders-admin.use-cases.spec.ts`: listado con `STORE_NOT_FOUND`, page 1 y limit 20 por defecto, filtros y offset, `meta`; detalle 404 `ORDER_NOT_FOUND`; cambio de estado: 404, transición inválida sin tocar la orden, éxito registrando el `sub` y devolviendo la orden, y 409 con el estado actual si otro cambio ganó la carrera.
 
 Pending: supertest con base para el orden por fecha, los filtros en SQL, la paginación, el aislamiento por tenant (404 de otra orden, TC-170), los 400 de validación y el 403 sin permiso; TC-098 (Maestro) y TC-171 (k6).
+
+### Pantallas (#80, RF-020)
+
+Automated (`backend/test/screens/screens.use-cases.spec.ts`):
+- Alta: `STORE_NOT_FOUND` si el local no es del tenant (sin insertar); token base64url de 43 caracteres y `player_url` con el slug del tenant (`WEB_ORIGIN_TEMPLATE`); dos altas generan tokens distintos; el nombre se guarda sin espacios en los extremos (TC-059).
+- Listado: `STORE_NOT_FOUND`; consulta al repositorio con `tenant_id` y `store_id`; cada pantalla incluye `player_url` e incluye las inactivas.
+
+Pending: supertest con base para el aislamiento por tenant, el orden por `created_at`, los 400 de validación (`store_id` no UUID, nombre vacío o de más de 80) y el 403 sin permiso; que la URL abra el reproductor (TC-059, depende del reproductor); TC-060 y TC-151 (R2).
 
 ### Imagen de producto (#51, RF-012)
 
