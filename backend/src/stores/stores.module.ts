@@ -14,5 +14,6 @@ import { PostgreStoreRepository } from './infraestructure/postgre-store.reposito
     GetStoreUseCase,
     UpdateStoreUseCase,
   ],
+  exports: [STORE_REPOSITORY],
 })
 export class StoresModule {}

@@ -15,12 +15,16 @@ import { RolesModule } from 'src/roles/roles.module';
 import { PermissionsGuard } from 'src/roles/api/permissions.guard';
 import { TenantsModule } from 'src/tenants/tenants.module';
 import { MembershipGuard } from 'src/tenants/api/membership.guard';
+import { StoresModule } from 'src/stores/stores.module';
+import { MeController } from './api/me.controller';
+import { GetMeUseCase } from './application/get-me.use-case';
 
 @Module({
   imports: [
     UsersModule,
     RolesModule,
     TenantsModule,
+    StoresModule,
     JwtModule.registerAsync({
       inject:[ConfigService],
       useFactory:(config:ConfigService) => {
@@ -38,10 +42,11 @@ import { MembershipGuard } from 'src/tenants/api/membership.guard';
       }
     })
   ],
-  controllers: [ AuthController,],
+  controllers: [ AuthController, MeController ],
   providers: [
     RegisterUseCase,
     LoginUseCase,
+    GetMeUseCase,
     {
       provide: PASSWORD_HASHER,
       useClass: BcryptPasswordHasher

@@ -752,6 +752,15 @@ Manual (contra la base): `GET /player/:token/playlist` con el `Host` del tenant 
 
 Pending: supertest con base para el `JOIN` y el aislamiento por tenant, el 304 real y los encabezados; reproductor web (TC de polling, RNF-009, RNF-010) depende de la UI.
 
+### Sesión: `GET /me` (#21, RF-007, RF-009)
+
+Automated (`backend/test/auth/get-me.use-case.spec.ts`):
+- Devuelve `user`, `tenant`, `stores` y `permissions` con el formato del contrato; los locales se consultan por `tenant_id`, solo se listan los activos y los permisos salen de `getPermissionCodesByUserId` (la misma consulta de `PermissionsGuard`).
+
+Manual (contra la base): con el JWT del `owner` de `local1` y el `Host` de `local1`, `GET /me` da 200 con todos los permisos y sus locales activos; con el `employee` solo los permisos de lectura de órdenes, productos y categorías; sin JWT da 401; con el JWT de `local1` y el `Host` de `local2` da 403 `NOT_A_MEMBER`; desactivar un local lo quita de `stores`.
+
+Pending: supertest con base para el aislamiento por tenant y el 401/403.
+
 ### Configuración del local (#79, RF-003, RF-004, RF-033)
 
 Automated (`backend/test/stores/stores.use-cases.spec.ts`):

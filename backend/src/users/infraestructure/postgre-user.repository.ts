@@ -32,8 +32,18 @@ export class PostgreUserRepository implements IUserRepository{
     getAll(): Promise<User[]> {
         throw new Error("Method not implemented.");
     }
-    getById(id:string): Promise<User> {
-        throw new Error("Method not implemented.");
+    async getById(id:string): Promise<ResponseUserData | null> {
+        const user = await this.userDb.findOne({ where: {user_id: id} });
+        if (!user) {
+            return null;
+        }
+        return {
+            user_id: user.user_id,
+            email: user.email,
+            first_name: user.first_name,
+            last_name: user.last_name,
+            created_at: user.created_at.toISOString()
+        }
     }
     async getByEmail(email:string): Promise<ResponseUserData | null> {
         const user = await this.userDb.findOne({

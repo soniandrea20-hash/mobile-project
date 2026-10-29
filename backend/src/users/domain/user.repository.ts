@@ -27,7 +27,7 @@ export interface IUserRepository{
     update(users:User):Promise<ResponseUserData>;
     delete(id:string):boolean;
     getAll():Promise<User[]>;
-    getById(id:string):Promise<User>;
+    getById(id:string):Promise<ResponseUserData | null>;
     getByEmail(email:string):Promise<ResponseUserData | null>;
     getByEmailWithPassword(email:string):Promise<ResponseUserDataWithPass | null>;
 }
