@@ -740,6 +740,18 @@ Manual (contra la base, `ffprobe` en el PATH): subir un MP4 real de 2,3 s y comp
 
 Pending: supertest con base para el aislamiento por tenant, el `INSERT ... max + 1`, la transacción de orden y de borrado, los 400 de validación (`store_id` o `contentId` no UUID, falta `file`, `duration_seconds` fuera de 3 a 60, `content_ids` vacío o repetido), el 403 sin permiso y el 413 real del video de 50 MB; TC-148 y TC-150 (k6); TC-058 (Playwright, depende del reproductor).
 
+### Reproductor: playlist (#71, RF-021 a RF-024)
+
+Automated (`backend/test/screens/get-playlist.use-case.spec.ts`):
+- Token inexistente, de pantalla o local inactivo, o de otro tenant: 404 `SCREEN_NOT_FOUND`, sin consultar contenido (la consulta filtra por `tenant_id`, token y ambos `is_active`).
+- Respuesta con claves en el orden del contrato, `poll_interval_seconds` 30, `qr_url` = origen del tenant + `/` + slug del local + `?src=` + `screen_id`.
+- Solo contenidos visibles, en orden de `sort_order`; sin visibles da `items: []` y versión de 16 hex.
+- `version` estable con los mismos datos y distinta al cambiar duración, ocultar, agregar, reordenar, nombre o slug del local (RF-023).
+
+Manual (contra la base): `GET /player/:token/playlist` con el `Host` del tenant da 200 con `ETag: "<version>"` y `Cache-Control: no-cache`; repetirlo con `If-None-Match` igual da 304 sin cuerpo; tras mover un contenido pasa a 200 con otra versión; desactivar la pantalla o el local da 404; el token de `local1` con el `Host` de `local2` da el mismo 404.
+
+Pending: supertest con base para el `JOIN` y el aislamiento por tenant, el 304 real y los encabezados; reproductor web (TC de polling, RNF-009, RNF-010) depende de la UI.
+
 ### Configuración del local (#79, RF-003, RF-004, RF-033)
 
 Automated (`backend/test/stores/stores.use-cases.spec.ts`):

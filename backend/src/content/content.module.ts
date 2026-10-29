@@ -25,5 +25,6 @@ import { PostgreContentRepository } from './infraestructure/postgre-content.repo
     ReorderContentUseCase,
     DeleteContentUseCase,
   ],
+  exports: [CONTENT_REPOSITORY],
 })
 export class ContentModule {}
