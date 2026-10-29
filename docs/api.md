@@ -156,8 +156,10 @@ Esquema `Store`:
 ```json
 { "store_id": "9d3e…", "name": "Palermo", "slug": "palermo", "address": "Av. Santa Fe 1234",
   "phone": "+541145550000", "whatsapp_number": "+5491112345678", "is_active": true,
-  "created_at": "2026-11-02T12:00:00.000Z" }
+  "created_at": "2026-11-02T12:00:00.000Z", "self_order_url": "http://local1.localhost:8081/palermo" }
 ```
+
+`self_order_url` es de solo lectura: URL del autopedido del local (origen del tenant + `/` + `slug` del local), la misma que va en los QR.
 
 ### `GET /stores`
 - Permiso: `stores:read`. RF-003. Respuesta 200: arreglo de `Store` del tenant (en R1, uno).

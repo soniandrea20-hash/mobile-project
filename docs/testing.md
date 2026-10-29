@@ -270,7 +270,7 @@ Los casos de estrés usan, salvo que se indique "meta propuesta", las metas de `
 | TC-101 | HU-21 | RF-031, RF-032, RF-009 | Flujo del empleado en Android | Empleado con sesión en emulador | una orden generada | 1. Login<br>2. Abrir la orden<br>3. Pasarla a lista | Estado actualizado y visible en el listado | Funcional feliz | Media | Sí (Maestro) |
 | TC-102 | HU-22 | RF-033 | Número válido | Configuración del local | +5491112345678 | 1. Guardar el número | Queda configurado | Funcional feliz | Alta | Sí (supertest) |
 | TC-103 | HU-22 | RF-033 | Número inválido | Configuración del local | "12345", "abc", "5491112345678" sin + | 1. Guardar cada valor | Rechazado indicando el formato internacional | Negativa | Alta | Sí (Jest) |
-| TC-104 | HU-22 | RF-033 | Borrar el número | Local con número | campo vacío | 1. Borrar y guardar<br>2. Confirmar un pedido | El número queda vacío; el local sigue recibiendo pedidos y la web del cliente omite el paso de wa.me | Funcional feliz | Alta | Sí (supertest) |
+| TC-104 | HU-22 | RF-033 | Borrar el número | Local con número | campo vacío | 1. Borrar y guardar<br>2. Confirmar un pedido | El número queda vacío; el local sigue recibiendo pedidos y la web del cliente omite el paso de wa.me. Jest: `stores.use-cases.spec.ts` cubre que `null` llega al repositorio para borrarlo | Funcional feliz | Alta | Sí (Jest + supertest) |
 | TC-105 | HU-22 | RF-033 | Longitud máxima E.164 | Configuración del local | números de 15 y 16 dígitos | 1. Guardar cada valor | 15 dígitos aceptado; 16 rechazado | Límite | Media | Sí (Jest) |
 | TC-106 | HU-23 | RF-034 | Mensaje completo | Orden con 2 ítems, nota y nombre | orden de prueba | 1. Generar el enlace wa.me | El texto incluye local, ítems, cantidades, total, nota y nombre, codificado para URL | Funcional feliz | Alta | Sí (Jest) |
 | TC-107 | HU-23 | RF-034 | Caracteres especiales | Orden con nota especial | tildes, "&" y saltos de línea | 1. Generar el enlace<br>2. Decodificar el texto | El texto decodificado es idéntico a la nota original | Límite | Alta | Sí (Jest) |
@@ -435,7 +435,7 @@ La columna Release (R1 o R2) coincide con la del xlsx de requerimientos. Nota: R
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | HU-01 / RF-001 | Tenant con slug único | R1 | Alta exitosa; slug reservado; slug duplicado (HU-01) | TC-001, TC-002, TC-003, TC-004, TC-129 | Funcional feliz, Negativa, Estrés, Límite | TC-001 | TC-002, TC-003 | TC-129 | Pendiente | — | — |
 | HU-02 / RF-002 | Resolución de tenant por subdominio | R1 | Subdominio existente; tenant no encontrado (HU-02) | TC-008, TC-009, TC-010, TC-130 | Funcional feliz, Negativa, Estrés | TC-008 | TC-009, TC-010 | TC-130 | Pendiente | — | — |
-| HU-03 / RF-003 | Gestión de locales | R1 | Crear local; local desactivado (HU-03) | TC-011, TC-014, TC-015, TC-131 | Funcional feliz, Negativa, Estrés | TC-011, TC-015 | TC-014 | TC-131 | Pendiente | — | — |
+| HU-03 / RF-003 | Gestión de locales | R1 | Crear local; local desactivado (HU-03) | TC-011, TC-014, TC-015, TC-131 | Funcional feliz, Negativa, Estrés | TC-011, TC-015 | TC-014 | TC-131 | Parcial: lectura y edición de locales (#79) cubiertas con Jest en caso de uso (mocks); supertest pendiente | — | — |
 | HU-03 / RF-004 | Slug de local y URL de self-order | R1 | Local accesible por slug; slug de local duplicado (HU-03) | TC-011, TC-012, TC-013, TC-132 | Funcional feliz, Negativa, Estrés | TC-011, TC-013 | TC-012 | TC-132 | Pendiente | — | — |
 | HU-04 / RF-005 | Autenticación con JWT | R1 | Credenciales válidas; credenciales inválidas; token vencido (HU-04) | TC-016, TC-017, TC-018, TC-133 | Funcional feliz, Negativa, Estrés | TC-016 | TC-017, TC-018 | TC-133 | Pendiente | — | — |
 | HU-04 / RF-006 | Guard global y rutas públicas | R1 | Ruta pública sin sesión (HU-04) | TC-019, TC-020, TC-134, TC-135 | Funcional feliz, Negativa, Estrés, Seguridad | TC-019 | TC-134 | TC-135 | Pendiente | — | — |
@@ -465,7 +465,7 @@ La columna Release (R1 o R2) coincide con la del xlsx de requerimientos. Nota: R
 | HU-20 / RF-030 | Registro de la orden con origen | R1 | Orden registrada; precio manipulado; local sin WhatsApp (HU-20) | TC-092, TC-093, TC-094, TC-095, TC-166, TC-168, TC-169 | Funcional feliz, Negativa, Estrés, Seguridad | TC-092, TC-094, TC-166 | TC-168 | TC-169 | Pendiente | — | — |
 | HU-21 / RF-031 | Listado de órdenes en el backoffice | R1 | Listado; sin órdenes (HU-21) | TC-096, TC-097, TC-098, TC-101, TC-170, TC-171 | Funcional feliz, Negativa, Estrés, Límite | TC-096, TC-097, TC-101 | TC-170 | TC-171 | Parcial: filtros, paginación y STORE_NOT_FOUND cubiertos con Jest en caso de uso (mocks); supertest pendiente | — | — |
 | HU-21 / RF-032 | Cambio de estado de una orden | R1 | Cambio de estado válido; transición inválida (HU-21) | TC-099, TC-100, TC-101, TC-172 | Funcional feliz, Negativa, Estrés | TC-099, TC-101 | TC-100 | TC-172 | Parcial: TC-100 y la lógica de TC-099 cubiertos con Jest (tabla de transiciones y casos de uso, mocks); supertest pendiente | — | — |
-| HU-22 / RF-033 | Configuración del número de WhatsApp del local | R1 | Número válido; número inválido; número vacío (HU-22) | TC-094, TC-102, TC-103, TC-104, TC-105, TC-173 | Funcional feliz, Negativa, Estrés, Límite | TC-094, TC-102, TC-104 | TC-103 | TC-173 | Pendiente | — | — |
+| HU-22 / RF-033 | Configuración del número de WhatsApp del local | R1 | Número válido; número inválido; número vacío (HU-22) | TC-094, TC-102, TC-103, TC-104, TC-105, TC-173 | Funcional feliz, Negativa, Estrés, Límite | TC-094, TC-102, TC-104 | TC-103 | TC-173 | Parcial: TC-104 cubierto con Jest en caso de uso (mocks); validación del formato y supertest pendientes | — | — |
 | HU-23 / RF-034 | Mensaje del pedido y enlace wa.me | R1 | Mensaje completo; caracteres especiales; cliente no envía (HU-23) | TC-106, TC-107, TC-108, TC-109, TC-174, TC-175, TC-176, TC-177, TC-178, TC-179 | Funcional feliz, Negativa, Estrés, Límite | TC-106, TC-174, TC-175 | TC-109, TC-178 | TC-179 | Pendiente | — | — |
 | HU-01 / RF-035 | Administración de tenants por el Root | R2 | Alta exitosa; tenant suspendido (HU-01) | TC-001, TC-005, TC-006, TC-007, TC-075, TC-180 | Funcional feliz, Negativa, Estrés, Seguridad | TC-001, TC-006 | TC-005, TC-075 | TC-180 | Pendiente | — | — |
 | RNF-001 | Integridad del pedido y del mensaje | R1 | 100% de coincidencia en ítems, cantidades y total en 50 pedidos de prueba automatizados; 0 diferencias de total. Cada parte del mensaje de hasta 1500 caracteres; los pedidos más largos se dividen en partes numeradas sin cortar ítems. | TC-108, TC-110, TC-181, TC-182 | Funcional feliz, Negativa, Estrés, Límite | TC-110 | TC-181 | TC-182 | Pendiente | — | — |
@@ -723,6 +723,15 @@ Automated (`backend/test/screens/screens.use-cases.spec.ts`):
 - Listado: `STORE_NOT_FOUND`; consulta al repositorio con `tenant_id` y `store_id`; cada pantalla incluye `player_url` e incluye las inactivas.
 
 Pending: supertest con base para el aislamiento por tenant, el orden por `created_at`, los 400 de validación (`store_id` no UUID, nombre vacío o de más de 80) y el 403 sin permiso; que la URL abra el reproductor (TC-059, depende del reproductor); TC-060 y TC-151 (R2).
+
+### Configuración del local (#79, RF-003, RF-004, RF-033)
+
+Automated (`backend/test/stores/stores.use-cases.spec.ts`):
+- Listado: consulta al repositorio con `tenant_id`; cada local incluye `self_order_url` (slug del tenant en `WEB_ORIGIN_TEMPLATE` + `/` + slug del local).
+- Detalle: devuelve el local con `self_order_url`; `STORE_NOT_FOUND` si no es del tenant.
+- Edición: guarda solo los campos enviados con el nombre sin espacios en los extremos; `whatsapp_number: null` llega al repositorio para borrarlo (TC-104); `EMPTY_UPDATE` (400) sin campos, sin tocar el repositorio; `STORE_NOT_FOUND` si el local no es del tenant.
+
+Pending: supertest con base para el aislamiento por tenant (404 de un local de otro tenant), el `UPDATE` parcial en SQL, los 400 de validación (nombre vacío o de más de 150, `address` de más de 255, `phone` de más de 50, `slug`/`is_active` ignorados), el 403 sin permiso, `storeId` no UUID y el número inválido con mensaje de formato internacional (TC-103, TC-105); TC-102; TC-131 y TC-173 (k6). La UI del backoffice (360 px, RNF-007) depende de #20 y #14.
 
 ### Imagen de producto (#51, RF-012)
 
