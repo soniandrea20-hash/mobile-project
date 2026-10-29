@@ -671,6 +671,8 @@ Categorías de causa raíz para clasificar: requisito ambiguo, diseño, código,
 | Unitarias | | Jest | Ya usado en `backend/test` |
 | Otras | | Lighthouse, axe, gitleaks, SSL Labs | Rendimiento web, accesibilidad, secretos y HTTPS |
 
+Pruebas manuales de API: `backend/http/` tiene un archivo `.http` por recurso con los 32 endpoints de R1 y sus errores documentados (extensión REST Client de VS Code). Requiere el backend en `http://localhost:3000` y el seed `database/seeds/dev_local1.sql` (tenant `local1`, dueño `owner@local1.test`); cada archivo hace su propio login y encadena los ids. Las muestras para subir archivos están en `backend/http/samples/`. No hay empleado en el seed: para probar 403 hay que crearlo a mano.
+
 Referencias de madurez: ISO/IEC 25000 (SQuaRE) como marco de calidad, CMMI niveles 3 a 5 como horizonte de madurez de procesos y automatización eficiente como práctica de base.
 
 ### Plantilla de defectos

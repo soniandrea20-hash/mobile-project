@@ -1,6 +1,7 @@
-### Registrar usuario
+@baseUrl = http://localhost:3000
 
-POST http://localhost:3000/auth/register
+### Registrar usuario (solo crea el usuario, sin tenant ni rol)
+POST {{baseUrl}}/auth/register
 Content-Type: application/json
 
 {

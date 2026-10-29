@@ -1,0 +1,27 @@
+@baseUrl = http://localhost:3000
+@tenant = local1
+@email = owner@local1.test
+@password = Local1-dev-2026
+
+### Login (guarda el token)
+# @name login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{ "email": "{{email}}", "password": "{{password}}" }
+
+@token = {{login.response.body.$.access_token}}
+
+### Sesion: usuario, tenant, locales y permisos
+GET {{baseUrl}}/me
+X-Tenant-Slug: {{tenant}}
+Authorization: Bearer {{token}}
+
+### Sin token (401)
+GET {{baseUrl}}/me
+X-Tenant-Slug: {{tenant}}
+
+### Tenant inexistente (404 TENANT_NOT_FOUND)
+GET {{baseUrl}}/me
+X-Tenant-Slug: no-existe
+Authorization: Bearer {{token}}

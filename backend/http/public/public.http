@@ -1,0 +1,38 @@
+@baseUrl = http://localhost:3000
+@tenant = local1
+@email = owner@local1.test
+@password = Local1-dev-2026
+
+@storeSlug = palermo
+
+### Catalogo publico (solo productos disponibles)
+# @name catalog
+GET {{baseUrl}}/public/stores/{{storeSlug}}/catalog
+X-Tenant-Slug: {{tenant}}
+
+@productId = {{catalog.response.body.$.categories[0].products[0].product_id}}
+
+### Crear pedido (los precios los calcula el servidor)
+POST {{baseUrl}}/public/stores/{{storeSlug}}/orders
+X-Tenant-Slug: {{tenant}}
+Content-Type: application/json
+
+{ "items": [{ "product_id": "{{productId}}", "quantity": 2 }], "customer_name": "Ana", "note": "Sin hielo" }
+
+### Carrito vacio (400)
+POST {{baseUrl}}/public/stores/{{storeSlug}}/orders
+X-Tenant-Slug: {{tenant}}
+Content-Type: application/json
+
+{ "items": [] }
+
+### Producto inexistente (409 PRODUCTS_UNAVAILABLE)
+POST {{baseUrl}}/public/stores/{{storeSlug}}/orders
+X-Tenant-Slug: {{tenant}}
+Content-Type: application/json
+
+{ "items": [{ "product_id": "00000000-0000-4000-8000-000000000000", "quantity": 1 }] }
+
+### Local inexistente (404 STORE_NOT_FOUND)
+GET {{baseUrl}}/public/stores/no-existe/catalog
+X-Tenant-Slug: {{tenant}}

@@ -1,9 +1,19 @@
-### Login de usuario
+@baseUrl = http://localhost:3000
 
-POST http://localhost:3000/auth/login
+### Login de usuario (dueno del seed dev_local1.sql)
+POST {{baseUrl}}/auth/login
 Content-Type: application/json
 
 {
-  "email": "test22@test.com",
-  "password": "Password123!"
+  "email": "owner@local1.test",
+  "password": "Local1-dev-2026"
+}
+
+### Login con credenciales incorrectas (401)
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "owner@local1.test",
+  "password": "Incorrecta123!"
 }
