@@ -323,20 +323,18 @@ El motivo de cada uno está en la tabla "Índices" de su entidad (secciones 5.1,
 
 - Los cambios de esquema se aplican **únicamente** con scripts SQL idempotentes en `database/scripts/`, ejecutados en orden por el runner `npm run db:apply` de `backend/scripts/db/`, que registra cada script en la tabla `schema_versions` (`version` = nombre del archivo sin `.sql`, `checksum` sha256, `applied_at`), lo corre dentro de una transacción y falla si cambió el checksum de un script ya aplicado.
 - **Están prohibidas las migraciones** de TypeORM, EF o cualquier otra herramienta. `synchronize` queda en `false` (como hoy en `app.module.ts`). Los ORM entities solo mapean las tablas.
-- **Estado actual del repositorio:** BU-018 está integrada en `develop`; el runner `npm run db:apply` y `database/scripts/001_initial_schema.sql` ya existen. El script de R1 es `002_mostrador_r1.sql`.
-- **Siguiente script:** `database/scripts/002_mostrador_r1.sql`. No se escribe en este documento. Debe ser idempotente por sí mismo (`IF NOT EXISTS`, `ON CONFLICT DO NOTHING`, bloques `DO $$` que consultan `pg_constraint` antes de agregar un CHECK) y contener, en este orden:
-  1. `tenants`: `ADD COLUMN IF NOT EXISTS slug` y `last_order_number`. Filas existentes: se completa `slug` con un valor válido derivado del id (por ejemplo `'tenant-' || left(tenant_id::text, 8)`) y recién después se agrega `NOT NULL`, el UNIQUE `uq_tenants_slug` y los CHECK de formato y palabras reservadas.
-  2. `stores`: `ADD COLUMN IF NOT EXISTS slug`, `whatsapp_number`, `created_at`; relleno de `slug` de las filas existentes; `NOT NULL`, UNIQUE (`tenant_id`, `slug`) y CHECK de formato, reservadas y E.164.
+- **Estado actual del repositorio:** el runner `npm run db:apply` y el esquema completo (identidad, tenants y locales, catálogo, playlist, pantallas, pedidos, roles y permisos) viven en un único script, `database/scripts/001_schema.sql`, que se reescribe en estado final mientras el proyecto está en desarrollo (la base se recrea desde cero). Debe ser idempotente por sí mismo (`IF NOT EXISTS`, `ON CONFLICT DO NOTHING`, bloques `DO $$` que consultan `pg_constraint` antes de agregar un CHECK) y contiene, en este orden:
+  1. Tablas de identidad y acceso (`users`, `roles`, `users_roles`, `permissions`, `roles_permissions`).
+  2. `tenants` y `stores` con `slug`, `last_order_number`, `whatsapp_number`, `created_at` y los CHECK de formato, reservadas y E.164 ya dentro del `CREATE TABLE`; `users_tenants` y `users_stores`.
   3. `CREATE TABLE IF NOT EXISTS` de `categories`, `products`, `content_items`, `screens`, `orders`, `order_items`, con todas sus restricciones.
   4. `CREATE [UNIQUE] INDEX IF NOT EXISTS` de los índices de la sección 7.
   5. `COMMENT ON TABLE/COLUMN/INDEX` de las tablas, columnas importantes e índices (sin comentar las columnas obvias).
-  6. Semillas de permisos y roles (ver `docs/api.md`, sección 12): `INSERT ... ON CONFLICT DO NOTHING` de los códigos de permiso, de los roles `root`, `owner` y `employee`, y de `roles_permissions`.
-- Los datos de demostración (tenant `local1`, local `palermo`, usuario dueño vinculado en `users_tenants`, `users_roles` y `users_stores`) van en un script aparte `database/seeds/dev_local1.sql`, también idempotente, que se ejecuta a mano en desarrollo. `002` no contiene datos de demostración.
+  6. Semillas de permisos y roles (ver `docs/api.md`, sección 12): `INSERT ... ON CONFLICT DO NOTHING` de los códigos de permiso (incluidos `tenants:*`), de los roles `root`, `owner` y `employee`, y de `roles_permissions` (`root` todos; `owner` todos salvo `tenants:*`; `employee` el subconjunto de lectura y órdenes).
 - Cada script nuevo se verifica ejecutándolo dos veces sobre una base limpia y una base con datos: la segunda corrida no cambia nada.
 
 ## 9. Fuera de R1
 
-Quedan para R2 y **no** se crean en `002_mostrador_r1.sql`:
+Quedan para R2 y **no** se crean en `001_schema.sql`:
 
 - Catálogo desde foto con IA (RF-015 a RF-017): sin tabla persistente; el borrador se confirma o se descarta.
 - Varios locales con empleados (RF-003 ampliado, RF-008): `users_stores` ya existe; faltan endpoints y el filtro por locales asignados.
@@ -373,5 +371,5 @@ Decisión: **queda reemplazado por este modelo en R1**.
 
 - No se aplica ni se convierte a script versionado; nunca formó parte de `database/scripts/`, así que ninguna base lo tiene registrado en `schema_versions`.
 - Las tablas equivalentes de Mostrador son `products`, `orders` y `order_items`, con `tenant_id` y sin stock, pagos ni donaciones (fuera de alcance).
-- Se elimina del repositorio en el mismo cambio que agrega `002_mostrador_r1.sql`.
+- Se elimina del repositorio en el mismo cambio que agrega `001_schema.sql`.
 - Si alguna base de desarrollo ya lo aplicó a mano, sus tablas (nombres en español) no chocan con las de R1 (nombres en inglés), pero conviene recrear esa base.

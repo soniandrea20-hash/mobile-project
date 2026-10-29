@@ -1,7 +1,11 @@
 @baseUrl = http://localhost:3000
-@tenant = local1
-@email = owner@local1.test
-@password = Local1-dev-2026
+@tenant = local3
+@email = dueno@local3.test
+@password = Dueno-dev-2026!
+@token = {{login.response.body.$.access_token}}
+@storeId = {{stores.response.body.$[0].store_id}}
+@mediaUrl = {{upload.response.body.$.url}}
+@mediaContentId = {{upload.response.body.$.content_id}}
 
 ### Login (guarda el token)
 # @name login
@@ -10,15 +14,11 @@ Content-Type: application/json
 
 { "email": "{{email}}", "password": "{{password}}" }
 
-@token = {{login.response.body.$.access_token}}
-
 ### Obtener el local (guarda store_id)
 # @name stores
 GET {{baseUrl}}/stores
 X-Tenant-Slug: {{tenant}}
 Authorization: Bearer {{token}}
-
-@storeId = {{stores.response.body.$[0].store_id}}
 
 ### Subir una imagen de contenido para obtener una url /media
 # @name upload
@@ -37,9 +37,6 @@ Content-Type: image/png
 
 < ../samples/promo.png
 ------mostrador--
-
-@mediaUrl = {{upload.response.body.$.url}}
-@mediaContentId = {{upload.response.body.$.content_id}}
 
 ### Descargar el archivo (publico, Cache-Control immutable)
 GET {{baseUrl}}{{mediaUrl}}

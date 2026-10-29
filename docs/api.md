@@ -639,7 +639,7 @@ Reglas de división:
 
 ## 12. Permisos
 
-Estilo de código existente: `recurso:acción` (por ejemplo `products:create`, citado en `database/scripts/001_initial_schema.sql`). Se usan con `@RequirePermissions('<codigo>')`; `PermissionsGuard` los lee de `roles_permissions` según los roles del usuario en `users_roles`. Se siembran en `database/scripts/002_mostrador_r1.sql` (RF-007); los `tenants:*` en `database/scripts/003_admin_plataforma.sql`.
+Estilo de código existente: `recurso:acción` (por ejemplo `products:create`, citado en `database/scripts/001_schema.sql`). Se usan con `@RequirePermissions('<codigo>')`; `PermissionsGuard` los lee de `roles_permissions` según los roles del usuario en `users_roles`. Se siembran en `database/scripts/001_schema.sql` (RF-007).
 
 | Código | Endpoints | `owner` | `employee` |
 | --- | --- | --- | --- |
@@ -666,7 +666,7 @@ Estilo de código existente: `recurso:acción` (por ejemplo `products:create`, c
 | `tenants:create` | `POST /tenants` | no | no |
 | `tenants:update` | `PATCH /tenants/:id` | no | no |
 
-- Roles sembrados (`roles.name`): `root`, `owner`, `employee` (en el xlsx: Root, Dueño, Empleado). `root` recibe todos los permisos (`003_admin_plataforma.sql`, para que `/me` lo refleje) y además `PermissionsGuard` le permite **cualquier** permiso en cualquier tenant (administra todo). Un permiso agregado en un script posterior debe otorgarse también a `root`.
+- Roles sembrados (`roles.name`): `root`, `owner`, `employee` (en el xlsx: Root, Dueño, Empleado). `root` recibe todos los permisos (`001_schema.sql`, para que `/me` lo refleje) y además `PermissionsGuard` le permite **cualquier** permiso en cualquier tenant (administra todo). Un permiso nuevo debe otorgarse también a `root`.
 - `GET /me` y `/auth/*` no requieren permiso.
 - Un empleado que intenta editar el catálogo o el contenido recibe 403 (RF-008, HU-05).
 - En R1 el empleado ve las órdenes de todos los locales del tenant (hay un solo local); el filtro por `users_stores` es R2.
@@ -723,11 +723,11 @@ Para que las tres pistas las resuelvan de forma explícita:
 | --- | --- | --- |
 | 1 | `LoginUseCase` distingue "El email … no se encuentra registrado" de "Las credenciales no son correctas"; RF-005 pide una respuesta uniforme. | Backend unifica ambos casos en 401 `Las credenciales no son correctas`. **Hecho (#21).** |
 | 2 | No existe contexto de tenant: ni middleware, ni columna `slug`, ni el JWT lleva tenant. | Backend agrega `TenantMiddleware` (Host o `X-Tenant-Slug`, sección 1.2), un guard de pertenencia a `users_tenants` y exige `tenant_id` en los repositorios. **Avance (#69):** `TenantMiddleware` hecho. **Avance (#21):** guard de pertenencia hecho (`NOT_A_MEMBER`). **Hecho (#73):** todos los repositorios con alcance de tenant (locales, categorías, productos, contenido, pantallas y órdenes) filtran por `tenant_id` en cada consulta, incluidos los `JOIN`. |
-| 3 | ~~`TenantOrmEntity` mapea `name` como `varchar(320) unique`, mientras `database/scripts/001_initial_schema.sql` define `VARCHAR(150)` sin UNIQUE.~~ | **Resuelto (#69):** `name` es `varchar(150)` sin UNIQUE y el ORM entity agrega `slug` y `last_order_number`. |
+| 3 | ~~`TenantOrmEntity` mapea `name` como `varchar(320) unique`, mientras `database/scripts/001_schema.sql` define `VARCHAR(150)` sin UNIQUE.~~ | **Resuelto (#69):** `name` es `varchar(150)` sin UNIQUE y el ORM entity agrega `slug` y `last_order_number`. |
 | 4 | `PermissionsGuard` obtiene los permisos desde `users_roles` (global), mientras `users_tenants` también guarda `role_id` por tenant. | En R1 un usuario pertenece a un solo tenant, el resultado es el mismo. Con varios tenants (R2) los permisos deben salir de `users_tenants.role_id`. |
 | 5 | `main.ts` habilita CORS solo para `http://localhost:8081` (llegó desde `main`, PR #68) y no sirve archivos estáticos. | Backend habilita CORS para `*.localhost` y `*.mostrador.io` con los encabezados `Authorization`, `Content-Type`, `X-Tenant-Slug`, `If-None-Match` y expone `ETag`; sirve `/media` desde `UPLOADS_DIR`. **Hecho (#69, #73):** CORS y encabezados; `/media` se sirve desde `UPLOADS_DIR` con `Cache-Control: public, max-age=31536000, immutable` (sección 11). |
 | 6 | `TenantsModule` no tenía controlador. | **Hecho (#76):** ahora tiene `TenantsController` (`GET/POST /tenants`, `PATCH /tenants/:id`, solo `root`, sección 3.1). |
 | 7 | `POST /auth/register` es público y no vincula al usuario a ningún tenant. | Sin cambio fuera del contexto admin; se documenta para que nadie asuma que un usuario registrado ya puede usar el backoffice. **Hecho (#76):** en el contexto admin el primer registro es `root`. |
-| 8 | ~~El versionado SQL (`db:apply`, `database/scripts/001_initial_schema.sql`) estaba solo en `feature/BU-018-db-versioning`.~~ | **Resuelto:** BU-018 integrada en `develop` (squash). El próximo script es `002_mostrador_r1.sql`. |
+| 8 | ~~El versionado SQL (`db:apply`, `database/scripts/001_schema.sql`) estaba solo en `feature/BU-018-db-versioning`.~~ | **Resuelto:** BU-018 integrada en `develop` (squash). El esquema vive en `001_schema.sql`. |
 | 9 | `backend/src/products` (PR #68, EduKit) expone `GET /products` y `GET /products/:id` públicos con datos en memoria (`products.data.ts`), sin tenant ni base. | **Se reemplaza en R1** por los endpoints de productos de este contrato (§9 y §11): con tenant, persistidos y con permisos. El módulo en memoria ya está eliminado (**Hecho (#73)**: `products.data.ts` no existe y `ProductsModule` usa la base). Pendiente en `mobile/`: `src/lib/products.ts` sigue llamando a `GET /products` y `/products/:id` sin tenant ni token; debe pasar al contrato nuevo (§9 y §11). |
-| 10 | `database/modelo_relacional.sql` (PR #67, EduKit) define `librerias`, `bibliotecas`, `productos`, `ordenes`, `subpedidos`, `pagos`, `donaciones` y otras tablas del producto anterior. Está fuera de `database/scripts/`, así que el versionado no lo aplica. | **Queda reemplazado** por `002_mostrador_r1.sql` (ver `docs/modelo-datos.md`, sección 11). No se aplica ni se migra: **Hecho (#73):** el archivo ya no está en el repositorio. |
+| 10 | `database/modelo_relacional.sql` (PR #67, EduKit) define `librerias`, `bibliotecas`, `productos`, `ordenes`, `subpedidos`, `pagos`, `donaciones` y otras tablas del producto anterior. Está fuera de `database/scripts/`, así que el versionado no lo aplica. | **Queda reemplazado** por `001_schema.sql` (ver `docs/modelo-datos.md`, sección 11). No se aplica ni se migra: **Hecho (#73):** el archivo ya no está en el repositorio. |

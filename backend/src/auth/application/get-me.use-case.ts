@@ -1,6 +1,6 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { ROLE_REPOSITORY, type IRoleRepository } from "src/roles/domain/role.repository";
-import { STORE_REPOSITORY, type IStoreRepository } from "src/stores/domain/store.repository";
+import { STORE_REPOSITORY, type IStoreRepository, type StoreRow } from "src/stores/domain/store.repository";
 import { Tenant } from "src/tenants/domain/tenant.entity";
 import { USER_REPOSITORY, type IUserRepository } from "src/users/domain/user.repository";
 
@@ -20,7 +20,7 @@ export class GetMeUseCase {
     async execute(tenant: Tenant | undefined, userId: string){
         const [user, stores, permissions, isRoot] = await Promise.all([
             this.userRepository.getById(userId),
-            tenant ? this.storeRepository.list(tenant.tenant_id) : [],
+            tenant ? this.storeRepository.list(tenant.tenant_id) : ([] as StoreRow[]),
             this.roleRepository.getPermissionCodesByUserId(userId),
             this.roleRepository.isRoot(userId),
         ]);

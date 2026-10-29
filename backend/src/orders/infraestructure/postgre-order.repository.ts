@@ -28,7 +28,8 @@ class PostgreOrderTransaction implements IOrderTransaction {
 
     // The row lock held until commit serializes concurrent orders of the same tenant.
     async nextOrderNumber(tenantId: string): Promise<number> {
-        const rows = await this.manager.query(
+        // pg returns [rows, affectedCount] for UPDATE
+        const [rows] = await this.manager.query(
             'UPDATE tenants SET last_order_number = last_order_number + 1 WHERE tenant_id = $1 RETURNING last_order_number',
             [tenantId],
         );

@@ -1,7 +1,11 @@
 @baseUrl = http://localhost:3000
-@tenant = local1
-@email = owner@local1.test
-@password = Local1-dev-2026
+@tenant = local3
+@email = dueno@local3.test
+@password = Dueno-dev-2026!
+@token = {{login.response.body.$.access_token}}
+@storeId = {{stores.response.body.$[0].store_id}}
+@screenToken = {{screens.response.body.$[0].token}}
+@etag = {{playlist.response.headers.ETag}}
 
 ### Login (guarda el token)
 # @name login
@@ -10,15 +14,11 @@ Content-Type: application/json
 
 { "email": "{{email}}", "password": "{{password}}" }
 
-@token = {{login.response.body.$.access_token}}
-
 ### Obtener el local (guarda store_id)
 # @name stores
 GET {{baseUrl}}/stores
 X-Tenant-Slug: {{tenant}}
 Authorization: Bearer {{token}}
-
-@storeId = {{stores.response.body.$[0].store_id}}
 
 ### Token de una pantalla existente (crear una antes en screens/screens.http si no hay)
 # @name screens
@@ -26,14 +26,10 @@ GET {{baseUrl}}/screens?store_id={{storeId}}
 X-Tenant-Slug: {{tenant}}
 Authorization: Bearer {{token}}
 
-@screenToken = {{screens.response.body.$[0].token}}
-
 ### Playlist (publico; anota el ETag de la respuesta)
 # @name playlist
 GET {{baseUrl}}/player/{{screenToken}}/playlist
 X-Tenant-Slug: {{tenant}}
-
-@etag = {{playlist.response.headers.ETag}}
 
 ### Misma playlist con If-None-Match (304 sin cuerpo)
 GET {{baseUrl}}/player/{{screenToken}}/playlist

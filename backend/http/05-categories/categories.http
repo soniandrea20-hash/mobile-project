@@ -1,7 +1,10 @@
 @baseUrl = http://localhost:3000
-@tenant = local1
-@email = owner@local1.test
-@password = Local1-dev-2026
+@tenant = local3
+@email = dueno@local3.test
+@password = Dueno-dev-2026!
+@token = {{login.response.body.$.access_token}}
+@storeId = {{stores.response.body.$[0].store_id}}
+@categoryId = {{newCategory.response.body.$.category_id}}
 
 ### Login (guarda el token)
 # @name login
@@ -10,15 +13,11 @@ Content-Type: application/json
 
 { "email": "{{email}}", "password": "{{password}}" }
 
-@token = {{login.response.body.$.access_token}}
-
 ### Obtener el local (guarda store_id)
 # @name stores
 GET {{baseUrl}}/stores
 X-Tenant-Slug: {{tenant}}
 Authorization: Bearer {{token}}
-
-@storeId = {{stores.response.body.$[0].store_id}}
 
 ### Listar categorias
 GET {{baseUrl}}/categories?store_id={{storeId}}
@@ -33,8 +32,6 @@ Authorization: Bearer {{token}}
 Content-Type: application/json
 
 { "store_id": "{{storeId}}", "name": "Entradas", "sort_order": 4 }
-
-@categoryId = {{newCategory.response.body.$.category_id}}
 
 ### Nombre repetido (409 CATEGORY_NAME_TAKEN)
 POST {{baseUrl}}/categories

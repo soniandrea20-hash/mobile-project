@@ -671,7 +671,7 @@ Categorías de causa raíz para clasificar: requisito ambiguo, diseño, código,
 | Unitarias | | Jest | Ya usado en `backend/test` |
 | Otras | | Lighthouse, axe, gitleaks, SSL Labs | Rendimiento web, accesibilidad, secretos y HTTPS |
 
-Pruebas manuales de API: `backend/http/` tiene un archivo `.http` por recurso con los 35 endpoints de R1 y sus errores documentados (extensión REST Client de VS Code). `admin/admin.http` no necesita seed: solo `db:apply`, registra al administrador y crea un tenant con su dueño (#76). El resto requiere el backend en `http://localhost:3000` y el seed `database/seeds/dev_local1.sql` (tenant `local1`, dueño `owner@local1.test`); cada archivo hace su propio login y encadena los ids. Las muestras para subir archivos están en `backend/http/samples/`. No hay empleado en el seed: para probar 403 hay que crearlo a mano.
+Pruebas manuales de API: `backend/http/` tiene un archivo `.http` por recurso con los 35 endpoints de R1 y sus errores documentados (extensión REST Client de VS Code). `01-admin/admin.http` no necesita seed: solo `db:apply`, registra al administrador y crea un tenant con su dueño (#76). El resto usa el tenant `local3`, el local `centro` y el dueño `dueno@local3.test` creados por `admin.http` (no requiere seed); cada archivo hace su propio login y encadena los ids. Las carpetas están numeradas en el orden de ejecución (`01-admin` a `12-player`): sin catálogo previo, `products` necesita una categoría, `public` y `orders` un producto, y `player` una pantalla. Las muestras para subir archivos están en `backend/http/samples/`. No hay empleado en el seed: para probar 403 hay que crearlo a mano.
 
 Referencias de madurez: ISO/IEC 25000 (SQuaRE) como marco de calidad, CMMI niveles 3 a 5 como horizonte de madurez de procesos y automatización eficiente como práctica de base.
 
@@ -793,7 +793,7 @@ Automated (`backend/test/roles`; from `backend/` run `npx jest --rootDir . --mod
 - `get-role-permissions.spec.ts`: returns role permissions, `[]` when none, `NotFoundException` for an unknown role (without querying permissions), deduplicates by `permission_id`.
 
 Manual:
-- Apply `database/scripts/001_initial_schema.sql` twice: no errors (idempotent), comments re-applied.
+- Apply `database/scripts/001_schema.sql` twice (on a DB that already has it, and on a fresh one): no errors (idempotent), comments re-applied.
 - Role with no rows in `roles_permissions` returns `[]` from `getPermissionsByRoleId`.
 - Unknown role id returns 404 once an HTTP controller exposes the use cases.
 - Duplicate `permissions.code` or duplicate `(role_id, permission_id)` is rejected.
@@ -906,7 +906,7 @@ Automated (`backend/test/db/plan-scripts.spec.ts`):
 - `checksum()` returns a stable 64-char hex.
 
 Manual (`npm run db:apply` from `backend/`):
-- Fresh DB: applies `001_initial_schema`, creates `schema_versions`.
+- Fresh DB: applies `001_schema`, creates `schema_versions`.
 - Run twice: second run applies 0 and skips all.
 - Edit an applied script: run fails naming it, nothing applied.
 - Failing script: rolled back, no `schema_versions` row for it.
@@ -914,9 +914,8 @@ Manual (`npm run db:apply` from `backend/`):
 ### R1 schema and dev seed (#78)
 
 Manual (`npm run db:apply` from `backend/`; seed run by hand):
-- Fresh DB: applies `001` and `002_mostrador_r1`; all R1 tables, indexes and comments exist.
-- DB with legacy `tenants`/`stores` rows: `slug` is backfilled (`tenant-<id8>`, `store-<id8>`) and `NOT NULL` holds.
-- Run twice: second run applies 0 and skips all; no row counts change (roles 3, permissions 19, roles_permissions 24).
+- Fresh DB + `db:apply`: applies `001_schema` and creates the full schema (identity, tenants, stores, catalog, playlist, screens, orders), all indexes, comments and seeded roles/permissions (roles 3, permissions 22, roles_permissions root 22 / owner 19 / employee 5).
+- Run twice: second run applies 0 and skips all; no row counts change (roles 3, permissions 22, roles_permissions 46).
 - Every new table, important column and index has a `COMMENT` (query `obj_description` for indexes and tables).
 - Constraints reject: invalid or reserved slug, malformed `whatsapp_number`, `price <= 0`, `quantity` outside 1 to 50, oversized `content_items.size_bytes`, duplicate category name per store (case-insensitive), duplicate `order_number` per tenant.
 - `order_items.line_total` equals `unit_price * quantity`; deleting a product sets `order_items.product_id` to NULL; deleting a category with products fails.
@@ -962,7 +961,7 @@ Automated (`backend/test`):
 - `auth/get-me.use-case.spec.ts`: en el contexto admin `tenant: null`, `stores: []`, permisos de `root` e `is_root: true`; en un tenant, `is_root: false` para el dueno.
 - `roles/route-permissions.spec.ts`: toda ruta de `/tenants` exige `tenants:*` y ningun permiso del dueno o del empleado alcanza (TC-007).
 
-Manual (backend corriendo, base con `db:apply` sin la semilla de desarrollo, `BASE_DOMAIN=localhost`; archivo `backend/http/admin/admin.http`):
+Manual (backend corriendo, base con `db:apply` sin la semilla de desarrollo, `BASE_DOMAIN=localhost`; archivo `backend/http/01-admin/admin.http`):
 - `POST /auth/register` con `X-Tenant-Slug: admin`: 201; el usuario queda con rol `root` (`select * from users_roles` con el rol `root`). Un segundo registro con otro email: 403 `ADMIN_ALREADY_EXISTS` y no se crea el usuario. El mismo email: 409.
 - Registro sin `admin` (por ejemplo `X-Tenant-Slug: local1` o sin encabezado): crea un usuario comun sin rol.
 - Login del `root` y `GET /me` con `X-Tenant-Slug: admin`: `tenant: null`, `stores: []`, `permissions` con los tres `tenants:*`, `is_root: true`. Con `X-Tenant-Slug: <tenant>`: devuelve ese tenant y sus locales, `is_root: true`.

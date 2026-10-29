@@ -1,7 +1,8 @@
 @baseUrl = http://localhost:3000
-@tenant = local1
-@email = owner@local1.test
-@password = Local1-dev-2026
+@tenant = local3
+@email = dueno@local3.test
+@password = Dueno-dev-2026!
+@token = {{login.response.body.$.access_token}}
 
 ### Login (guarda el token)
 # @name login
@@ -9,8 +10,6 @@ POST {{baseUrl}}/auth/login
 Content-Type: application/json
 
 { "email": "{{email}}", "password": "{{password}}" }
-
-@token = {{login.response.body.$.access_token}}
 
 ### Sesion: usuario, tenant, locales y permisos
 GET {{baseUrl}}/me

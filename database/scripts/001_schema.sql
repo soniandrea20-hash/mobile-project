@@ -1,53 +1,101 @@
-/* Mostrador R1: slug por tenant y local, catalogo, playlist, pantallas y pedidos. Ver docs/modelo-datos.md */
+/* Schema de Mostrador: estado final completo (identidad, tenants y locales, catalogo, playlist, pantallas, pedidos, roles y permisos). Idempotente. Ver docs/modelo-datos.md */
 
--- tenants
+-- identidad y acceso
 
-alter table tenants add column if not exists slug varchar(30);
-alter table tenants add column if not exists last_order_number integer not null default 0;
+create table if not exists users (
+    user_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email VARCHAR(255) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    first_name VARCHAR(100) NOT NULL,
+    last_name VARCHAR(100) NOT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
 
-update tenants set slug = 'tenant-' || left(tenant_id::text, 8) where slug is null;
-alter table tenants alter column slug set not null;
+create table if not exists roles (
+    role_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(50) NOT NULL UNIQUE,
+    description VARCHAR(255),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
 
-do $$
-begin
-    if not exists (select from pg_constraint where conname = 'ck_tenants_slug_format') then
-        alter table tenants add constraint ck_tenants_slug_format check (slug ~ '^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$');
-    end if;
-    if not exists (select from pg_constraint where conname = 'ck_tenants_slug_reserved') then
-        alter table tenants add constraint ck_tenants_slug_reserved check (slug not in ('www', 'api', 'app', 'admin'));
-    end if;
-    if not exists (select from pg_constraint where conname = 'ck_tenants_last_order_number') then
-        alter table tenants add constraint ck_tenants_last_order_number check (last_order_number >= 0);
-    end if;
-end $$;
+create table if not exists users_roles (
+    user_id UUID NOT NULL,
+    role_id UUID NOT NULL,
 
-create unique index if not exists uq_tenants_slug on tenants (slug);
+    PRIMARY KEY (user_id, role_id),
 
--- stores
+    CONSTRAINT fk_user_roles_user FOREIGN KEY (user_id) REFERENCES users(user_id),
+    CONSTRAINT fk_user_roles_role FOREIGN KEY (role_id) REFERENCES roles(role_id)
+);
 
-alter table stores add column if not exists slug varchar(30);
-alter table stores add column if not exists whatsapp_number varchar(16);
-alter table stores add column if not exists created_at timestamptz not null default current_timestamp;
+create table if not exists permissions (
+    permission_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    code VARCHAR(100) NOT NULL,
+    description VARCHAR(255),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-update stores set slug = 'store-' || left(store_id::text, 8) where slug is null;
-alter table stores alter column slug set not null;
+    CONSTRAINT uq_permissions_code UNIQUE (code)
+);
 
-do $$
-begin
-    if not exists (select from pg_constraint where conname = 'ck_stores_slug_format') then
-        alter table stores add constraint ck_stores_slug_format check (slug ~ '^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$');
-    end if;
-    if not exists (select from pg_constraint where conname = 'ck_stores_slug_reserved') then
-        alter table stores add constraint ck_stores_slug_reserved check (slug not in ('screen', 'media', 'api'));
-    end if;
-    if not exists (select from pg_constraint where conname = 'ck_stores_whatsapp_e164') then
-        alter table stores add constraint ck_stores_whatsapp_e164 check (whatsapp_number is null or whatsapp_number ~ '^\+[1-9][0-9]{7,14}$');
-    end if;
-end $$;
+create table if not exists roles_permissions (
+    role_id UUID NOT NULL,
+    permission_id UUID NOT NULL,
 
-create unique index if not exists uq_stores_tenant_slug on stores (tenant_id, slug);
+    PRIMARY KEY (role_id, permission_id),
 
--- tablas nuevas
+    CONSTRAINT fk_roles_permissions_role FOREIGN KEY (role_id) REFERENCES roles(role_id),
+    CONSTRAINT fk_roles_permissions_permission FOREIGN KEY (permission_id) REFERENCES permissions(permission_id)
+);
+
+-- tenants y locales
+
+create table if not exists tenants (
+    tenant_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(150) NOT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    slug VARCHAR(30) NOT NULL,
+    last_order_number INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT ck_tenants_slug_format CHECK (slug ~ '^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$'),
+    CONSTRAINT ck_tenants_slug_reserved CHECK (slug NOT IN ('www', 'api', 'app', 'admin')),
+    CONSTRAINT ck_tenants_last_order_number CHECK (last_order_number >= 0)
+);
+
+create table if not exists stores (
+    store_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id UUID NOT NULL REFERENCES tenants(tenant_id),
+    name VARCHAR(150) NOT NULL,
+    address VARCHAR(255),
+    phone VARCHAR(50),
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    slug VARCHAR(30) NOT NULL,
+    whatsapp_number VARCHAR(16),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT ck_stores_slug_format CHECK (slug ~ '^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$'),
+    CONSTRAINT ck_stores_slug_reserved CHECK (slug NOT IN ('screen', 'media', 'api')),
+    CONSTRAINT ck_stores_whatsapp_e164 CHECK (whatsapp_number IS NULL OR whatsapp_number ~ '^\+[1-9][0-9]{7,14}$')
+);
+
+create table if not exists users_tenants (
+    user_id UUID NOT NULL REFERENCES users(user_id),
+    tenant_id UUID NOT NULL REFERENCES tenants(tenant_id),
+    role_id UUID NOT NULL REFERENCES roles(role_id),
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    PRIMARY KEY (user_id, tenant_id, role_id)
+);
+
+create table if not exists users_stores (
+    user_id UUID NOT NULL REFERENCES users(user_id),
+    store_id UUID NOT NULL REFERENCES stores(store_id),
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    PRIMARY KEY (user_id, store_id)
+);
+
+-- catalogo, playlist, pantallas y pedidos
 
 create table if not exists categories (
     category_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -143,6 +191,8 @@ create table if not exists order_items (
 
 -- indices
 
+create unique index if not exists uq_tenants_slug on tenants (slug);
+create unique index if not exists uq_stores_tenant_slug on stores (tenant_id, slug);
 create unique index if not exists uq_categories_store_name on categories (store_id, lower(name));
 create index if not exists ix_products_store_available on products (store_id, is_available);
 create index if not exists ix_products_category on products (category_id);
@@ -225,6 +275,16 @@ comment on index ix_orders_store_created is 'Listado del backoffice, mas recient
 comment on index ix_orders_store_status_created is 'Mismo listado filtrado por estado, que es el filtro mas usado por el local';
 comment on index order_items_pkey is 'Composite PK (order_id, line_number): garantiza lineas unicas por pedido, sirve la lectura de las lineas en orden y es el indice de la FK a orders';
 
+-- comentarios: identidad
+
+comment on column permissions.code is 'Stable identifier checked by authorization guards (e.g. products:create)';
+comment on column tenants.created_at is 'Orden estable del listado de tenants del administrador de la plataforma';
+comment on index uq_permissions_code is 'Enforces one row per permission code and speeds up lookup by code';
+comment on index roles_permissions_pkey is 'Composite PK (role_id, permission_id): a role holds a permission at most once; its index also serves listing permissions by role_id';
+comment on index users_roles_pkey is 'Composite PK (user_id, role_id): a user holds a role at most once; its index also serves listing roles by user_id';
+comment on index users_tenants_pkey is 'Composite PK (user_id, tenant_id, role_id): a user holds a role in a tenant at most once; its index also serves listing the tenants and roles of a user';
+comment on index users_stores_pkey is 'Composite PK (user_id, store_id): a user is assigned to a store at most once; its index also serves listing the stores of a user';
+
 -- semillas: roles y permisos (docs/api.md seccion 12)
 
 insert into roles (name, description) values
@@ -255,12 +315,26 @@ insert into permissions (code, description) values
     ('orders:update', 'Cambiar el estado de las ordenes')
 on conflict (code) do nothing;
 
--- owner: todos los permisos de R1
+insert into permissions (code, description) values
+    ('tenants:read', 'Ver tenants'),
+    ('tenants:create', 'Crear tenants con su primer local y su dueno'),
+    ('tenants:update', 'Editar o suspender tenants')
+on conflict (code) do nothing;
+
+-- root: todos los permisos, para que /me refleje que administra todo
 insert into roles_permissions (role_id, permission_id)
 select r.role_id, p.permission_id
 from roles r
 cross join permissions p
-where r.name = 'owner'
+where r.name = 'root'
+on conflict do nothing;
+
+-- owner: todos los permisos salvo los de administracion de la plataforma (tenants:*)
+insert into roles_permissions (role_id, permission_id)
+select r.role_id, p.permission_id
+from roles r
+cross join permissions p
+where r.name = 'owner' and p.code not like 'tenants:%'
 on conflict do nothing;
 
 -- employee: solo lectura de locales, categorias y productos, y gestion de ordenes
@@ -270,3 +344,9 @@ from roles r
 join permissions p on p.code in ('stores:read', 'categories:read', 'products:read', 'orders:read', 'orders:update')
 where r.name = 'employee'
 on conflict do nothing;
+
+/*
+La unicidad del root no usa indice: la garantiza la aplicacion con pg_advisory_xact_lock en la transaccion
+del primer registro (UsersRepository.createRoot). Un indice parcial no puede filtrar por el nombre del rol,
+que vive en otra tabla.
+*/

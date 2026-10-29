@@ -1,7 +1,11 @@
 @baseUrl = http://localhost:3000
-@tenant = local1
-@email = owner@local1.test
-@password = Local1-dev-2026
+@tenant = local3
+@email = dueno@local3.test
+@password = Dueno-dev-2026!
+@token = {{login.response.body.$.access_token}}
+@storeId = {{stores.response.body.$[0].store_id}}
+@categoryId = {{categories.response.body.0.category_id}}
+@productId = {{newProduct.response.body.$.product_id}}
 
 ### Login (guarda el token)
 # @name login
@@ -10,23 +14,17 @@ Content-Type: application/json
 
 { "email": "{{email}}", "password": "{{password}}" }
 
-@token = {{login.response.body.$.access_token}}
-
 ### Obtener el local (guarda store_id)
 # @name stores
 GET {{baseUrl}}/stores
 X-Tenant-Slug: {{tenant}}
 Authorization: Bearer {{token}}
 
-@storeId = {{stores.response.body.$[0].store_id}}
-
 ### Categoria para el producto (guarda category_id)
 # @name categories
 GET {{baseUrl}}/categories?store_id={{storeId}}
 X-Tenant-Slug: {{tenant}}
 Authorization: Bearer {{token}}
-
-@categoryId = {{categories.response.body.0.category_id}}
 
 ### Listar productos (filtros opcionales)
 GET {{baseUrl}}/products?store_id={{storeId}}&category_id={{categoryId}}&is_available=true
@@ -41,8 +39,6 @@ Authorization: Bearer {{token}}
 Content-Type: application/json
 
 { "store_id": "{{storeId}}", "category_id": "{{categoryId}}", "name": "Papas fritas", "description": "Porcion grande", "price": "2900.00", "is_available": true, "sort_order": 9 }
-
-@productId = {{newProduct.response.body.$.product_id}}
 
 ### Precio invalido (400)
 POST {{baseUrl}}/products
@@ -64,6 +60,14 @@ Authorization: Bearer {{token}}
 Content-Type: application/json
 
 { "price": "3100.00", "is_available": false }
+
+### Volver a mostrarlo (07-public y 08-orders necesitan un producto disponible)
+PATCH {{baseUrl}}/products/{{productId}}
+X-Tenant-Slug: {{tenant}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "is_available": true }
 
 ### Subir imagen (PUT multipart, campo file)
 PUT {{baseUrl}}/products/{{productId}}/image
@@ -96,7 +100,7 @@ DELETE {{baseUrl}}/products/{{productId}}/image
 X-Tenant-Slug: {{tenant}}
 Authorization: Bearer {{token}}
 
-### Borrar producto (204)
+### Borrar producto (204). Saltearlo si despues vas a ejecutar 07-public y 08-orders
 DELETE {{baseUrl}}/products/{{productId}}
 X-Tenant-Slug: {{tenant}}
 Authorization: Bearer {{token}}

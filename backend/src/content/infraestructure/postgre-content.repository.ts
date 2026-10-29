@@ -40,7 +40,8 @@ export class PostgreContentRepository implements IContentRepository {
     }
 
     async update(tenantId: string, contentId: string, patch: ContentPatch): Promise<ContentRow | null> {
-        const rows = await this.dataSource.query(
+        // pg returns [rows, affectedCount] for UPDATE
+        const [rows] = await this.dataSource.query(
             `UPDATE content_items
              SET duration_seconds = COALESCE($3, duration_seconds), is_visible = COALESCE($4, is_visible), updated_at = now()
              WHERE tenant_id = $1 AND content_id = $2
@@ -67,7 +68,8 @@ export class PostgreContentRepository implements IContentRepository {
 
     delete(tenantId: string, contentId: string): Promise<ContentRow | null> {
         return this.dataSource.transaction(async (manager) => {
-            const rows: ContentRow[] = await manager.query(
+            // pg returns [rows, affectedCount] for DELETE
+            const [rows]: [ContentRow[], number] = await manager.query(
                 `DELETE FROM content_items WHERE tenant_id = $1 AND content_id = $2 RETURNING ${COLUMNS}`,
                 [tenantId, contentId],
             );

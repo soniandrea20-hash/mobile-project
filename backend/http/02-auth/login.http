@@ -1,12 +1,12 @@
 @baseUrl = http://localhost:3000
 
-### Login de usuario (dueno del seed dev_local1.sql)
+### Login de usuario (dueno creado en 01-admin/admin.http)
 POST {{baseUrl}}/auth/login
 Content-Type: application/json
 
 {
-  "email": "owner@local1.test",
-  "password": "Local1-dev-2026"
+  "email": "dueno@local3.test",
+  "password": "Dueno-dev-2026!"
 }
 
 ### Login con credenciales incorrectas (401)
@@ -14,6 +14,6 @@ POST {{baseUrl}}/auth/login
 Content-Type: application/json
 
 {
-  "email": "owner@local1.test",
+  "email": "dueno@local3.test",
   "password": "Incorrecta123!"
 }

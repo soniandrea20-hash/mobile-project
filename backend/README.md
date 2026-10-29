@@ -63,8 +63,8 @@ SQL scripts live in `database/scripts` and are named `NNN_description.sql`.
 
 - Every script must be idempotent.
 - Never edit an applied script (the runner fails on a changed checksum); add a new one instead.
-- Apply pending scripts with `npm run db:apply` (reads `DB_*` from `backend/.env`). Applied versions are recorded in `schema_versions`.
-- Without the seed: the first user registered on the `admin` host (`X-Tenant-Slug: admin`) becomes `root` and creates tenants with `POST /tenants` (see `http/admin/admin.http`).
+- Apply pending scripts with `npm run db:apply` (reads `DB_*` from `backend/.env`). Applied versions are recorded in `schema_versions`. The whole schema lives in `database/scripts/001_schema.sql`; recreate the DB from scratch and re-run `db:apply` when it changes during development.
+- Without the seed: the first user registered on the `admin` host (`X-Tenant-Slug: admin`) becomes `root` and creates tenants with `POST /tenants` (see `http/01-admin/admin.http`).
 - Dev data (tenant `local1`, owner `owner@local1.test`, sample catalog) is not part of `db:apply`. Run it by hand after applying: `psql -h localhost -U postgres -d <db> -f ../database/seeds/dev_local1.sql`. It is idempotent; the dev password is in the file header.
 
 ## Deployment

@@ -1,16 +1,15 @@
 @baseUrl = http://localhost:3000
-@tenant = local1
-@email = owner@local1.test
-@password = Local1-dev-2026
+@tenant = local3
+@email = dueno@local3.test
+@password = Dueno-dev-2026!
+@productId = {{catalog.response.body.$.categories[0].products[0].product_id}}
 
-@storeSlug = palermo
+@storeSlug = centro
 
 ### Catalogo publico (solo productos disponibles)
 # @name catalog
 GET {{baseUrl}}/public/stores/{{storeSlug}}/catalog
 X-Tenant-Slug: {{tenant}}
-
-@productId = {{catalog.response.body.$.categories[0].products[0].product_id}}
 
 ### Crear pedido (los precios los calcula el servidor)
 POST {{baseUrl}}/public/stores/{{storeSlug}}/orders

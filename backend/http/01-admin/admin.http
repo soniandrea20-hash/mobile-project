@@ -3,6 +3,9 @@
 @adminPassword = Admin-dev-2026!
 @ownerEmail = dueno@local3.test
 @ownerPassword = Dueno-dev-2026!
+@token = {{login.response.body.$.access_token}}
+@tenantId = {{created.response.body.$.tenant_id}}
+@ownerToken = {{ownerLogin.response.body.$.access_token}}
 
 # Flujo sin semilla: requiere solo `db:apply`. Ejecutar en orden.
 # El contexto admin se elige con el encabezado X-Tenant-Slug: admin (o el Host admin.localhost).
@@ -27,8 +30,6 @@ POST {{baseUrl}}/auth/login
 Content-Type: application/json
 
 { "email": "{{adminEmail}}", "password": "{{adminPassword}}" }
-
-@token = {{login.response.body.$.access_token}}
 
 ### 4. Sesion en admin: tenant null, stores [], permisos tenants:*, is_root true
 GET {{baseUrl}}/me
@@ -59,8 +60,6 @@ Content-Type: application/json
   "store": { "name": "Centro", "slug": "centro", "address": "Av. Siempre Viva 742" },
   "owner_email": "{{ownerEmail}}"
 }
-
-@tenantId = {{created.response.body.$.tenant_id}}
 
 ### 8. Dueno no registrado (404 USER_NOT_FOUND)
 POST {{baseUrl}}/tenants
@@ -123,8 +122,6 @@ POST {{baseUrl}}/auth/login
 Content-Type: application/json
 
 { "email": "{{ownerEmail}}", "password": "{{ownerPassword}}" }
-
-@ownerToken = {{ownerLogin.response.body.$.access_token}}
 
 ###
 GET {{baseUrl}}/me

@@ -1,7 +1,11 @@
 @baseUrl = http://localhost:3000
-@tenant = local1
-@email = owner@local1.test
-@password = Local1-dev-2026
+@tenant = local3
+@email = dueno@local3.test
+@password = Dueno-dev-2026!
+@token = {{login.response.body.$.access_token}}
+@storeId = {{stores.response.body.$[0].store_id}}
+@productId = {{products.response.body.$[0].product_id}}
+@orderId = {{newOrder.response.body.$.order_id}}
 
 ### Login (guarda el token)
 # @name login
@@ -10,15 +14,11 @@ Content-Type: application/json
 
 { "email": "{{email}}", "password": "{{password}}" }
 
-@token = {{login.response.body.$.access_token}}
-
 ### Obtener el local (guarda store_id)
 # @name stores
 GET {{baseUrl}}/stores
 X-Tenant-Slug: {{tenant}}
 Authorization: Bearer {{token}}
-
-@storeId = {{stores.response.body.$[0].store_id}}
 
 ### Producto disponible para el pedido
 # @name products
@@ -26,17 +26,13 @@ GET {{baseUrl}}/products?store_id={{storeId}}&is_available=true
 X-Tenant-Slug: {{tenant}}
 Authorization: Bearer {{token}}
 
-@productId = {{products.response.body.$[0].product_id}}
-
 ### Crear pedido como cliente publico (guarda order_id)
 # @name newOrder
-POST {{baseUrl}}/public/stores/palermo/orders
+POST {{baseUrl}}/public/stores/centro/orders
 X-Tenant-Slug: {{tenant}}
 Content-Type: application/json
 
 { "items": [{ "product_id": "{{productId}}", "quantity": 2 }], "customer_name": "Ana", "note": "Sin hielo" }
-
-@orderId = {{newOrder.response.body.$.order_id}}
 
 ### Listar ordenes (paginado, filtros opcionales)
 GET {{baseUrl}}/orders?store_id={{storeId}}&status=generada&page=1&limit=20

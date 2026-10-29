@@ -1,7 +1,11 @@
 @baseUrl = http://localhost:3000
-@tenant = local1
-@email = owner@local1.test
-@password = Local1-dev-2026
+@tenant = local3
+@email = dueno@local3.test
+@password = Dueno-dev-2026!
+@token = {{login.response.body.$.access_token}}
+@storeId = {{stores.response.body.$[0].store_id}}
+@imageId = {{newImage.response.body.$.content_id}}
+@videoId = {{newVideo.response.body.$.content_id}}
 
 ### Login (guarda el token)
 # @name login
@@ -10,15 +14,11 @@ Content-Type: application/json
 
 { "email": "{{email}}", "password": "{{password}}" }
 
-@token = {{login.response.body.$.access_token}}
-
 ### Obtener el local (guarda store_id)
 # @name stores
 GET {{baseUrl}}/stores
 X-Tenant-Slug: {{tenant}}
 Authorization: Bearer {{token}}
-
-@storeId = {{stores.response.body.$[0].store_id}}
 
 ### Listar contenido (incluye ocultos)
 GET {{baseUrl}}/content?store_id={{storeId}}
@@ -47,8 +47,6 @@ Content-Type: image/png
 < ../samples/promo.png
 ------mostrador--
 
-@imageId = {{newImage.response.body.$.content_id}}
-
 ### Subir video (la duracion la mide el backend)
 # @name newVideo
 POST {{baseUrl}}/content
@@ -66,8 +64,6 @@ Content-Type: video/mp4
 
 < ../samples/promo.mp4
 ------mostrador--
-
-@videoId = {{newVideo.response.body.$.content_id}}
 
 ### Video con duration_seconds (422)
 POST {{baseUrl}}/content

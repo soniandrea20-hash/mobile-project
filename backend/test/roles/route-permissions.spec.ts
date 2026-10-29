@@ -7,7 +7,7 @@ import { StoresController } from 'src/stores/api/stores.controller';
 import { OrdersController } from 'src/orders/api/orders.controller';
 import { TenantsController } from 'src/tenants/api/tenants.controller';
 
-// Mirrors the employee grants in database/scripts/002_mostrador_r1.sql.
+// Mirrors the employee grants in database/scripts/001_schema.sql.
 const EMPLOYEE = ['stores:read', 'categories:read', 'products:read', 'orders:read', 'orders:update'];
 
 const requiredBy = (controller: any) =>
