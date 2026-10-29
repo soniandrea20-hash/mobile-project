@@ -7,6 +7,7 @@ import { TenantsModule } from './tenants/tenants.module';
 import { RolesModule } from './roles/roles.module';
 import { ProductsModule } from './products/products.module';
 import { CategoriesModule } from './categories/categories.module';
+import { OrdersModule } from './orders/orders.module';
 import { TenantMiddleware } from './tenants/api/tenant.middleware';
 
 @Module({
@@ -38,7 +39,8 @@ import { TenantMiddleware } from './tenants/api/tenant.middleware';
     TenantsModule,
     RolesModule,
     ProductsModule,
-    CategoriesModule
+    CategoriesModule,
+    OrdersModule
   ],
   controllers: [],
   providers: [],
