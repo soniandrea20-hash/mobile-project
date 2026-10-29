@@ -21,6 +21,8 @@ export class PermissionsGuard implements CanActivate {
     const userId = context.switchToHttp().getRequest().user?.sub;
     if (!userId) throw new ForbiddenException();
 
+    if (await this.roleRepository.isRoot(userId)) return true;
+
     const owned = new Set(await this.roleRepository.getPermissionCodesByUserId(userId));
     if (!required.every((code) => owned.has(code))) throw new ForbiddenException();
     return true;

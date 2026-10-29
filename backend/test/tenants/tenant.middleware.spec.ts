@@ -6,8 +6,8 @@ describe('TenantMiddleware', () => {
   const middleware = new TenantMiddleware(repository as any);
   const tenant = { tenant_id: 't1', slug: 'local1', name: 'Local 1', is_active: true };
 
-  const run = async (host: string | undefined, headers: Record<string, string> = {}) => {
-    const req: any = { headers: { host, ...headers } };
+  const run = async (host: string | undefined, headers: Record<string, string> = {}, path = '/stores') => {
+    const req: any = { headers: { host, ...headers }, originalUrl: path };
     const next = jest.fn();
     await middleware.use(req, {} as any, next);
     return { req, next };
@@ -40,7 +40,6 @@ describe('TenantMiddleware', () => {
     ['no slug anywhere', 'localhost', {}],
     ['reserved slug in Host', 'www.localhost', {}],
     ['invalid slug in header', '10.0.0.1', { 'x-tenant-slug': 'Bad_Slug' }],
-    ['reserved slug in header', '10.0.0.1', { 'x-tenant-slug': 'admin' }],
   ])('404 TENANT_NOT_FOUND: %s (no lookup)', async (_n, host, headers) => {
     await expect(run(host, headers)).rejects.toMatchObject({
       response: { code: 'TENANT_NOT_FOUND' },
@@ -57,6 +56,41 @@ describe('TenantMiddleware', () => {
     repository.findBySlug.mockResolvedValue({ ...tenant, is_active: false });
     await expect(run('local1.localhost')).rejects.toMatchObject({
       response: { code: 'TENANT_NOT_FOUND' },
+    });
+  });
+
+  describe('admin context', () => {
+    it.each([
+      ['Host admin.<base>', 'admin.localhost:3000', {}],
+      ['X-Tenant-Slug admin', '10.0.0.1', { 'x-tenant-slug': 'admin' }],
+    ])('flags the platform context without a tenant lookup: %s', async (_n, host, headers) => {
+      const { req, next } = await run(host, headers, '/tenants');
+      expect(req.platformAdmin).toBe(true);
+      expect(req.tenant).toBeUndefined();
+      expect(repository.findBySlug).not.toHaveBeenCalled();
+      expect(next).toHaveBeenCalled();
+    });
+
+    it.each(['/auth/register', '/me', '/tenants', '/tenants/abc?x=1'])('allows %s', async (path) => {
+      const { req } = await run('admin.localhost', {}, path);
+      expect(req.platformAdmin).toBe(true);
+    });
+
+    it.each(['/stores', '/public/stores/x/catalog', '/orders', '/tenantsx', '/media/a.png'])(
+      '404 TENANT_NOT_FOUND on %s (no leak of tenant-scoped routes)',
+      async (path) => {
+        await expect(run('admin.localhost', {}, path)).rejects.toMatchObject({ response: { code: 'TENANT_NOT_FOUND' } });
+      },
+    );
+  });
+
+  describe('auth routes', () => {
+    it('go through without a tenant when the host does not resolve one', async () => {
+      repository.findBySlug.mockResolvedValue(null);
+      const { req, next } = await run('nope.localhost', {}, '/auth/login');
+      expect(req.tenant).toBeUndefined();
+      expect(req.platformAdmin).toBeUndefined();
+      expect(next).toHaveBeenCalled();
     });
   });
 });

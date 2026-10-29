@@ -1,7 +1,7 @@
-import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException, UnauthorizedException } from "@nestjs/common";
-import { UpdateTenantCommand } from "./commands/update.command";
-import { TENANT_REPOSITORY, type ITenantRepository } from "../domain/tenant.repository";
-import { Tenant } from "../domain/tenant.entity";
+import { Inject, Injectable } from "@nestjs/common";
+import { emptyUpdate } from "src/stores/domain/store.errors";
+import { tenantNotFound } from "../domain/tenant.errors";
+import { TENANT_REPOSITORY, type ITenantRepository, type TenantPatch } from "../domain/tenant.repository";
 
 @Injectable()
 export class UpdateTenantUseCase {
@@ -11,25 +11,14 @@ export class UpdateTenantUseCase {
         private readonly tenantRepository: ITenantRepository,
     ){}
 
-    async execute(tenantId: string, dto: UpdateTenantCommand){
-        
-        let tenantUpdated: Tenant | null = null;
-        const nameExists = await this.tenantRepository.getByName(dto.name.toLocaleLowerCase().trim());
+    async execute(tenantId: string, input: TenantPatch){
+        const patch: TenantPatch = {};
+        if (input.name !== undefined) patch.name = input.name.trim();
+        if (input.is_active !== undefined) patch.is_active = input.is_active;
+        if (Object.keys(patch).length === 0) throw emptyUpdate();
 
-        /* Si el nombre ya existe y es diferente al tenant que se está actualizando */
-        if (nameExists && nameExists.tenant_id !== tenantId){
-            throw new ConflictException(`El nombre de tenant ${dto.name} ya se encuentra registrado`);
-        }
-        
-        /* Chequeamos que exista el tenant */
-        const tenantExists = await this.tenantRepository.getById(tenantId);
-        if (!tenantExists){
-            throw new NotFoundException(`El tenant con ID ${tenantId} no existe`);
-        }
-        
-        tenantUpdated = await this.tenantRepository.update(tenantId, {
-            name: dto.name.trim()
-        })
-        return tenantUpdated;
+        const tenant = await this.tenantRepository.update(tenantId, patch);
+        if (!tenant) throw tenantNotFound();
+        return tenant;
     }
 }

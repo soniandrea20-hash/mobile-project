@@ -21,11 +21,12 @@ Regla de oro: si el código y este documento difieren, se corrige el que esté e
 
 ### 1.2 Resolución del tenant
 
-Toda ruta, salvo `/auth/*`, necesita un tenant. El backend lo resuelve así (RF-002):
+Toda ruta, salvo `/auth/*` y las del contexto admin (ver abajo), necesita un tenant. El backend lo resuelve así (RF-002):
 
 1. Se toma el Host de la solicitud. Si es `{slug}.{BASE_DOMAIN}`, ese `slug` se busca en `tenants.slug`. `BASE_DOMAIN` es `localhost` en desarrollo (`local1.localhost`) y `mostrador.io` en producción.
 2. Si el Host no trae subdominio utilizable (por ejemplo la app Android de Expo, que llama a una IP o a un host fijo) se lee el encabezado `X-Tenant-Slug: local1`. Ese encabezado solo se usa cuando el Host no aporta un slug.
-3. Responde **404** con `code: "TENANT_NOT_FOUND"` si el slug no existe, está en la lista reservada (`www`, `api`, `app`, `admin`), tiene formato inválido o el tenant está inactivo (`is_active = false`).
+3. Responde **404** con `code: "TENANT_NOT_FOUND"` si el slug no existe, está en la lista reservada (`www`, `api`, `app`), tiene formato inválido o el tenant está inactivo (`is_active = false`).
+4. **Contexto admin (plataforma):** el slug reservado `admin` (`admin.{BASE_DOMAIN}` o `X-Tenant-Slug: admin`) no es un tenant: no se adjunta ninguna fila de `tenants` y la solicitud queda marcada como contexto de administrador de la plataforma. En ese contexto solo responden `/auth/*`, `/me` y `/tenants*`; cualquier otra ruta (`/stores`, `/public/*`, `/media/*`, etc.) da 404 `TENANT_NOT_FOUND`, así que el contexto admin nunca expone datos de un tenant.
 
 El tenant resuelto es el único `tenant_id` que usa cualquier consulta (ver aislamiento en `docs/modelo-datos.md`, sección 4).
 
@@ -34,10 +35,11 @@ El tenant resuelto es el único `tenant_id` que usa cualquier consulta (ver aisl
 | Audiencia | Quién | Autenticación | Prefijo de rutas |
 | --- | --- | --- | --- |
 | Backoffice | Dueño y empleado, app Expo (Android y web) | `Authorization: Bearer <access_token>` (JWT del login existente) | `/me`, `/stores`, `/categories`, `/products`, `/content`, `/screens`, `/orders` |
+| Administrador de la plataforma | Usuario con rol `root`, en `admin.{BASE_DOMAIN}` | `Authorization: Bearer <access_token>` | `/me`, `/tenants` (y `/auth/*` para entrar) |
 | Pantalla | Televisor con el reproductor `/screen/:token` | El token de la pantalla en la ruta; sin login | `/player/:token/...` |
 | Cliente público | Persona que escanea el QR | Anónimo; tenant por Host | `/public/...` y archivos en `/media/...` |
 
-- Backoffice: el guard JWT es global y ya existe; las rutas públicas lo omiten con `@Public()`. Las rutas del backoffice usan `@RequirePermissions('<codigo>')` (códigos en la sección 12). Además de un JWT válido, el usuario debe ser **miembro activo del tenant del Host**: fila en `users_tenants` con `user_id = sub`, `tenant_id` resuelto e `is_active = true`; si no, 403 `NOT_A_MEMBER`.
+- Backoffice: el guard JWT es global y ya existe; las rutas públicas lo omiten con `@Public()`. Las rutas del backoffice usan `@RequirePermissions('<codigo>')` (códigos en la sección 12). Además de un JWT válido, el usuario debe ser **miembro activo del tenant del Host**: fila en `users_tenants` con `user_id = sub`, `tenant_id` resuelto e `is_active = true`; si no, 403 `NOT_A_MEMBER`. El rol `root` es la excepción: pasa el guard de pertenencia y el de permisos en **cualquier** tenant (administra todo), y es el único usuario aceptado en el contexto admin, donde no hay tenant.
 - Las rutas `/player/*`, `/public/*`, `/media/*` y `/auth/*` son `@Public()`.
 
 ### 1.4 Formato de errores
@@ -62,10 +64,10 @@ Errores comunes a todas las rutas del backoffice (no se repiten en cada endpoint
 | --- | --- |
 | 400 | Falla de validación del body, la query o un parámetro de ruta que no es UUID. |
 | 401 | Falta el encabezado `Authorization`, el esquema no es `Bearer`, el token es inválido o venció. |
-| 403 | El usuario no tiene el permiso requerido; o `code: "NOT_A_MEMBER"` si no es miembro del tenant del Host. |
+| 403 | El usuario no tiene el permiso requerido; o `code: "NOT_A_MEMBER"` si no es miembro del tenant del Host (en el contexto admin, si no es `root`). |
 | 404 | `code: "TENANT_NOT_FOUND"` (ver 1.2). Un identificador que no existe **o es de otro tenant** también da 404 (RNF-012). |
 
-Códigos de error de R1: `TENANT_NOT_FOUND`, `NOT_A_MEMBER`, `STORE_NOT_FOUND`, `SCREEN_NOT_FOUND`, `CONTENT_NOT_FOUND`, `CONTENT_LIST_MISMATCH`, `DURATION_NOT_ALLOWED`, `EMPTY_UPDATE`, `CATEGORY_NAME_TAKEN`, `CATEGORY_HAS_PRODUCTS`, `PRODUCT_LIMIT_REACHED`, `PRODUCTS_UNAVAILABLE`, `INVALID_STATUS_TRANSITION`, `MEDIA_TOO_LARGE`, `UNSUPPORTED_MEDIA_TYPE`, `VIDEO_TOO_LONG`, `MEDIA_UNREADABLE`.
+Códigos de error de R1: `TENANT_NOT_FOUND`, `NOT_A_MEMBER`, `STORE_NOT_FOUND`, `SCREEN_NOT_FOUND`, `CONTENT_NOT_FOUND`, `CONTENT_LIST_MISMATCH`, `DURATION_NOT_ALLOWED`, `EMPTY_UPDATE`, `CATEGORY_NAME_TAKEN`, `CATEGORY_HAS_PRODUCTS`, `PRODUCT_LIMIT_REACHED`, `PRODUCTS_UNAVAILABLE`, `INVALID_STATUS_TRANSITION`, `MEDIA_TOO_LARGE`, `UNSUPPORTED_MEDIA_TYPE`, `VIDEO_TOO_LONG`, `MEDIA_UNREADABLE`, `ADMIN_ALREADY_EXISTS`, `USER_NOT_FOUND`, `INVALID_SLUG`, `SLUG_TAKEN`.
 
 ### 1.5 Paginación, fechas y dinero
 
@@ -85,7 +87,7 @@ Implementada en `backend/src/auth/api/auth.controller.ts`. Rutas `@Public()`. No
 ### `POST /auth/register`
 
 - Auth: ninguna. Permiso: ninguno. Relacionado: RF-005, HU-04.
-- Request:
+- Request (en un tenant o sin tenant resuelto crea un usuario común; en el contexto admin ver abajo):
 
 ```json
 { "email": "juan@correo.com", "password": "Password123!", "first_name": "Juan", "last_name": "Perez" }
@@ -103,8 +105,9 @@ Implementada en `backend/src/auth/api/auth.controller.ts`. Rutas `@Public()`. No
 { "user_id": "5b0f0c6e-…", "email": "juan@correo.com", "first_name": "Juan", "last_name": "Perez", "created_at": "2026-11-02T15:30:00.000Z" }
 ```
 
-- Errores: 400 validación; 409 `El email {email} ya se encuentra registrado`.
-- Nota: el registro crea solo el usuario; no lo vincula a un tenant ni le da rol. En R1 el dueño se vincula por semilla/script (`users_tenants`, `users_roles`); no hay endpoint (la administración de tenants es R2).
+- Errores: 400 validación; 409 `El email {email} ya se encuentra registrado`; 403 `ADMIN_ALREADY_EXISTS` solo en el contexto admin.
+- Fuera del contexto admin el registro crea solo el usuario; no lo vincula a un tenant ni le da rol. El dueño de un tenant nuevo se registra así y luego el `root` lo vincula al crear el tenant (`POST /tenants`, sección 3.1).
+- **Primer administrador:** en el contexto admin (`admin.{BASE_DOMAIN}` o `X-Tenant-Slug: admin`) el primer registro, mientras ningún usuario tenga el rol `root`, crea el usuario y le asigna `root` en una transacción protegida con un candado de base de datos (`pg_advisory_xact_lock`), por lo que dos primeros registros simultáneos no pueden crear dos `root`. Si ya existe un `root`, el registro en el contexto admin se rechaza con **403** `ADMIN_ALREADY_EXISTS` y no se crea el usuario. No hace falta la semilla de desarrollo.
 
 ### `POST /auth/login`
 
@@ -134,7 +137,7 @@ Implementada en `backend/src/auth/api/auth.controller.ts`. Rutas `@Public()`. No
 
 ### `GET /me`
 
-- Auth: JWT. Permiso: ninguno (solo miembro del tenant). RF-007, RF-009.
+- Auth: JWT. Permiso: ninguno (solo miembro del tenant, o `root`). RF-007, RF-009.
 - Uso: tras el login, el backoffice conoce su tenant, sus locales y qué botones mostrar.
 - Respuesta **200**:
 
@@ -143,11 +146,63 @@ Implementada en `backend/src/auth/api/auth.controller.ts`. Rutas `@Public()`. No
   "user": { "user_id": "5b0f0c6e-…", "email": "juan@correo.com", "first_name": "Juan", "last_name": "Perez" },
   "tenant": { "tenant_id": "c1a2…", "name": "Local Uno", "slug": "local1" },
   "stores": [ { "store_id": "9d3e…", "name": "Palermo", "slug": "palermo" } ],
-  "permissions": ["categories:read", "orders:read", "orders:update"]
+  "permissions": ["categories:read", "orders:read", "orders:update"],
+  "is_root": false
 }
 ```
 
-- Errores: solo los comunes.
+- `is_root` es `true` para el administrador de la plataforma. En el contexto admin la respuesta es `"tenant": null`, `"stores": []`, `permissions` con todos los códigos (los recibe `root`) e `is_root: true`. Un `root` que llama a `/me` en el Host de un tenant recibe ese tenant y sus locales.
+- Errores: solo los comunes (en el contexto admin, 403 `NOT_A_MEMBER` si el usuario no es `root`).
+
+### 3.1 Administrador de la plataforma: tenants (`/tenants`)
+
+Solo en el contexto admin (`admin.{BASE_DOMAIN}` o `X-Tenant-Slug: admin`, sección 1.2) y solo para `root`. Cualquier otro usuario recibe 403.
+
+#### `GET /tenants`
+
+- Auth: JWT. Permiso: `tenants:read`.
+- Respuesta **200**:
+
+```json
+[ { "tenant_id": "c1a2…", "name": "Local Uno", "slug": "local1", "is_active": true, "created_at": "2026-11-02T15:30:00.000Z" } ]
+```
+
+#### `POST /tenants`
+
+- Auth: JWT. Permiso: `tenants:create`. Crea, en una sola transacción, el tenant, su primer local y los vínculos del dueño (`users_tenants` con rol `owner`, `users_stores` y `users_roles` `owner`).
+- Request:
+
+```json
+{ "name": "Local Tres", "slug": "local3", "store": { "name": "Centro", "slug": "centro", "address": "Av. Siempre Viva 742" }, "owner_email": "dueno@local3.com" }
+```
+
+| Campo | Regla |
+| --- | --- |
+| `name` | texto 1 a 150 caracteres, obligatorio |
+| `slug` | 3 a 30 caracteres en minúscula, dígitos o guion, sin guion al inicio ni al final; no puede ser `www`, `api`, `app` ni `admin` |
+| `store.name` | texto 1 a 150, obligatorio |
+| `store.slug` | mismo formato que el slug del tenant; no puede ser `screen`, `media` ni `api` |
+| `store.address` | texto hasta 255, opcional |
+| `owner_email` | email de un usuario **ya registrado** (`POST /auth/register`); el dueño debe registrarse primero |
+
+- Respuesta **201**:
+
+```json
+{
+  "tenant_id": "c1a2…", "name": "Local Tres", "slug": "local3", "is_active": true, "created_at": "2026-11-02T15:30:00.000Z",
+  "web_origin": "http://local3.localhost:8081",
+  "store": { "store_id": "9d3e…", "name": "Centro", "slug": "centro", "address": "Av. Siempre Viva 742", "phone": null, "whatsapp_number": null, "is_active": true, "created_at": "…", "self_order_url": "http://local3.localhost:8081/centro" }
+}
+```
+
+- Errores: 400 validación o `INVALID_SLUG` (formato o slug reservado); 404 `USER_NOT_FOUND` (el dueño no está registrado); 409 `SLUG_TAKEN`. Si algo falla no se crea ninguna fila.
+
+#### `PATCH /tenants/:tenantId`
+
+- Auth: JWT. Permiso: `tenants:update`.
+- Request: al menos uno de `name` (texto 1 a 150) o `is_active` (booleano). El `slug` no se edita (los QR impresos apuntan a él). `is_active: false` suspende el tenant: sus rutas dan 404 `TENANT_NOT_FOUND` hasta reactivarlo.
+- Respuesta **200**: el tenant `{ tenant_id, name, slug, is_active, created_at }`.
+- Errores: 400 validación o `EMPTY_UPDATE`; 404 `TENANT_NOT_FOUND`.
 
 ## 4. Backoffice: locales (`/stores`)
 
@@ -584,7 +639,7 @@ Reglas de división:
 
 ## 12. Permisos
 
-Estilo de código existente: `recurso:acción` (por ejemplo `products:create`, citado en `database/scripts/001_initial_schema.sql`). Se usan con `@RequirePermissions('<codigo>')`; `PermissionsGuard` los lee de `roles_permissions` según los roles del usuario en `users_roles`. Se siembran en `database/scripts/002_mostrador_r1.sql` (RF-007).
+Estilo de código existente: `recurso:acción` (por ejemplo `products:create`, citado en `database/scripts/001_initial_schema.sql`). Se usan con `@RequirePermissions('<codigo>')`; `PermissionsGuard` los lee de `roles_permissions` según los roles del usuario en `users_roles`. Se siembran en `database/scripts/002_mostrador_r1.sql` (RF-007); los `tenants:*` en `database/scripts/003_admin_plataforma.sql`.
 
 | Código | Endpoints | `owner` | `employee` |
 | --- | --- | --- | --- |
@@ -607,8 +662,11 @@ Estilo de código existente: `recurso:acción` (por ejemplo `products:create`, c
 | `screens:update` | `PATCH /screens/:id` | sí | no |
 | `orders:read` | `GET /orders`, `GET /orders/:id` | sí | sí |
 | `orders:update` | `PATCH /orders/:id/status` | sí | sí |
+| `tenants:read` | `GET /tenants` | no | no |
+| `tenants:create` | `POST /tenants` | no | no |
+| `tenants:update` | `PATCH /tenants/:id` | no | no |
 
-- Roles sembrados (`roles.name`): `root`, `owner`, `employee` (en el xlsx: Root, Dueño, Empleado). En R1 `root` no recibe permisos de R1; los suyos (`tenants:*`) son de R2.
+- Roles sembrados (`roles.name`): `root`, `owner`, `employee` (en el xlsx: Root, Dueño, Empleado). `root` recibe todos los permisos (`003_admin_plataforma.sql`, para que `/me` lo refleje) y además `PermissionsGuard` le permite **cualquier** permiso en cualquier tenant (administra todo). Un permiso agregado en un script posterior debe otorgarse también a `root`.
 - `GET /me` y `/auth/*` no requieren permiso.
 - Un empleado que intenta editar el catálogo o el contenido recibe 403 (RF-008, HU-05).
 - En R1 el empleado ve las órdenes de todos los locales del tenant (hay un solo local); el filtro por `users_stores` es R2.
@@ -619,9 +677,10 @@ Estilo de código existente: `recurso:acción` (por ejemplo `products:create`, c
 | --- | --- | --- |
 | Autenticación existente | 2 | `POST /auth/register`, `POST /auth/login` |
 | Backoffice (JWT) | 26 | `/me` 1; `/stores` 3; `/categories` 4; `/products` 7; `/content` 5; `/screens` 3; `/orders` 3 |
+| Administrador de la plataforma (JWT `root`) | 3 | `/tenants` 3 (sección 3.1) |
 | Pantalla (token) | 1 | `GET /player/:token/playlist` |
 | Cliente público (anónimo) | 3 | `GET /public/stores/:storeSlug/catalog`, `POST /public/stores/:storeSlug/orders`, `GET /media/*` |
-| **Total R1** | **32** | |
+| **Total R1** | **35** | |
 
 Trazabilidad RF a endpoint o tabla (los RF de R2 están en la sección 14):
 
@@ -651,7 +710,7 @@ Solo nombres; se definirán en R2:
 - Catálogo desde foto con IA (RF-015 a RF-017): `POST /catalog/photo-imports`, `GET /catalog/photo-imports/:id`, `POST /catalog/photo-imports/:id/confirm`.
 - Varios locales y empleados (RF-003 ampliado, RF-008): `POST /stores`, `PATCH /stores/:id` (alta y baja), `GET /employees`, `POST /employees`, `PATCH /employees/:id`, `PUT /employees/:id/stores`.
 - Regeneración de token: `POST /screens/:id/regenerate-token`.
-- Tenant suspendido y panel root (RF-035): `GET /tenants`, `POST /tenants`, `PATCH /tenants/:id`, `POST /tenants/:id/suspend`, `POST /tenants/:id/reactivate`; respuesta 503 de mantenimiento en rutas públicas.
+- Tenant suspendido (RF-035): `POST /tenants/:id/suspend`, `POST /tenants/:id/reactivate` (hoy se suspende con `PATCH /tenants/:id { is_active: false }`); respuesta 503 de mantenimiento en rutas públicas; panel web del root.
 - Métricas: `GET /metrics/orders`, `GET /metrics/screens`.
 - Control de abuso (límite de solicitudes) e idempotencia del alta de pedido.
 - Despliegue de producción (proxy, wildcard `*.mostrador.io`, copias de seguridad).
@@ -667,8 +726,8 @@ Para que las tres pistas las resuelvan de forma explícita:
 | 3 | ~~`TenantOrmEntity` mapea `name` como `varchar(320) unique`, mientras `database/scripts/001_initial_schema.sql` define `VARCHAR(150)` sin UNIQUE.~~ | **Resuelto (#69):** `name` es `varchar(150)` sin UNIQUE y el ORM entity agrega `slug` y `last_order_number`. |
 | 4 | `PermissionsGuard` obtiene los permisos desde `users_roles` (global), mientras `users_tenants` también guarda `role_id` por tenant. | En R1 un usuario pertenece a un solo tenant, el resultado es el mismo. Con varios tenants (R2) los permisos deben salir de `users_tenants.role_id`. |
 | 5 | `main.ts` habilita CORS solo para `http://localhost:8081` (llegó desde `main`, PR #68) y no sirve archivos estáticos. | Backend habilita CORS para `*.localhost` y `*.mostrador.io` con los encabezados `Authorization`, `Content-Type`, `X-Tenant-Slug`, `If-None-Match` y expone `ETag`; sirve `/media` desde `UPLOADS_DIR`. **Hecho (#69, #73):** CORS y encabezados; `/media` se sirve desde `UPLOADS_DIR` con `Cache-Control: public, max-age=31536000, immutable` (sección 11). |
-| 6 | `TenantsModule` no tiene controlador. | R1 no lo necesita (el tenant llega por semilla); el alta por el root es R2. |
-| 7 | `POST /auth/register` es público y no vincula al usuario a ningún tenant. | Sin cambio en R1; se documenta para que nadie asuma que un usuario registrado ya puede usar el backoffice. |
+| 6 | `TenantsModule` no tenía controlador. | **Hecho (#76):** ahora tiene `TenantsController` (`GET/POST /tenants`, `PATCH /tenants/:id`, solo `root`, sección 3.1). |
+| 7 | `POST /auth/register` es público y no vincula al usuario a ningún tenant. | Sin cambio fuera del contexto admin; se documenta para que nadie asuma que un usuario registrado ya puede usar el backoffice. **Hecho (#76):** en el contexto admin el primer registro es `root`. |
 | 8 | ~~El versionado SQL (`db:apply`, `database/scripts/001_initial_schema.sql`) estaba solo en `feature/BU-018-db-versioning`.~~ | **Resuelto:** BU-018 integrada en `develop` (squash). El próximo script es `002_mostrador_r1.sql`. |
 | 9 | `backend/src/products` (PR #68, EduKit) expone `GET /products` y `GET /products/:id` públicos con datos en memoria (`products.data.ts`), sin tenant ni base. | **Se reemplaza en R1** por los endpoints de productos de este contrato (§9 y §11): con tenant, persistidos y con permisos. El módulo en memoria ya está eliminado (**Hecho (#73)**: `products.data.ts` no existe y `ProductsModule` usa la base). Pendiente en `mobile/`: `src/lib/products.ts` sigue llamando a `GET /products` y `/products/:id` sin tenant ni token; debe pasar al contrato nuevo (§9 y §11). |
 | 10 | `database/modelo_relacional.sql` (PR #67, EduKit) define `librerias`, `bibliotecas`, `productos`, `ordenes`, `subpedidos`, `pagos`, `donaciones` y otras tablas del producto anterior. Está fuera de `database/scripts/`, así que el versionado no lo aplica. | **Queda reemplazado** por `002_mostrador_r1.sql` (ver `docs/modelo-datos.md`, sección 11). No se aplica ni se migra: **Hecho (#73):** el archivo ya no está en el repositorio. |

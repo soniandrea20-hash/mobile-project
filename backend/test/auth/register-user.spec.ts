@@ -1,5 +1,5 @@
 import { Test } from '@nestjs/testing';
-import { ConflictException } from '@nestjs/common';
+import { ConflictException, ForbiddenException } from '@nestjs/common';
 import { RegisterUseCase } from 'src/auth/application/register.use-case';
 import { IUserRepository } from 'src/users/domain/user.repository';
 
@@ -10,7 +10,8 @@ describe('RegisterUserUseCase', () => {
 
   const usersRepository = {
     getByEmail: jest.fn(),
-    create:jest.fn()
+    create:jest.fn(),
+    createRoot:jest.fn()
   }
 
   const passwordHasher = {
@@ -83,4 +84,41 @@ describe('RegisterUserUseCase', () => {
       .toHaveBeenCalled();
       
   })
+
+  describe('en el contexto admin', () => {
+    const input = { email: 'root@test.com', password: 'Test!123#', first_name: 'Root', last_name: 'Admin' };
+
+    beforeEach(() => {
+      usersRepository.getByEmail.mockResolvedValue(null);
+      passwordHasher.hash.mockResolvedValue('hash-password');
+    });
+
+    it('el primer registro crea el usuario con rol root', async () => {
+      usersRepository.createRoot.mockResolvedValue({ user_id: 'u1', email: input.email });
+
+      const result = await useCase.execute(input, true);
+
+      expect(usersRepository.createRoot).toHaveBeenCalledWith({
+        email: input.email, password_hash: 'hash-password', first_name: 'Root', last_name: 'Admin',
+      });
+      expect(usersRepository.create).not.toHaveBeenCalled();
+      expect(result.email).toBe(input.email);
+    });
+
+    it('rechaza con 403 ADMIN_ALREADY_EXISTS cuando ya existe un root', async () => {
+      usersRepository.createRoot.mockResolvedValue(null);
+
+      const error = await useCase.execute(input, true).catch((e) => e);
+
+      expect(error).toBeInstanceOf(ForbiddenException);
+      expect(error.getResponse()).toMatchObject({ code: 'ADMIN_ALREADY_EXISTS' });
+    });
+
+    it('un email repetido sigue dando 409', async () => {
+      usersRepository.getByEmail.mockResolvedValue({ email: input.email });
+
+      await expect(useCase.execute(input, true)).rejects.toThrow(ConflictException);
+      expect(usersRepository.createRoot).not.toHaveBeenCalled();
+    });
+  });
 });

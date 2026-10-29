@@ -48,4 +48,12 @@ export class PostgreRoleRepository implements IRoleRepository{
             .getRawMany<{ code: string }>();
         return rows.map((r) => r.code);
     }
+
+    async isRoot(userId: string): Promise<boolean> {
+        const rows = await this.roleDb.manager.query(
+            "SELECT 1 FROM users_roles ur JOIN roles r ON r.role_id = ur.role_id WHERE ur.user_id = $1 AND r.name = 'root' LIMIT 1",
+            [userId],
+        );
+        return rows.length > 0;
+    }
 }

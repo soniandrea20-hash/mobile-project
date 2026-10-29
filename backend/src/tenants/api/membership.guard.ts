@@ -1,6 +1,7 @@
 import { CanActivate, ExecutionContext, ForbiddenException, Inject, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { IS_PUBLIC_KEY } from 'src/auth/api/public.decorator';
+import { type IRoleRepository, ROLE_REPOSITORY } from 'src/roles/domain/role.repository';
 import { type ITenantRepository, TENANT_REPOSITORY } from '../domain/tenant.repository';
 
 @Injectable()
@@ -8,6 +9,7 @@ export class MembershipGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
     @Inject(TENANT_REPOSITORY) private readonly tenantRepository: ITenantRepository,
+    @Inject(ROLE_REPOSITORY) private readonly roleRepository: IRoleRepository,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -16,8 +18,12 @@ export class MembershipGuard implements CanActivate {
     }
 
     const { user, tenant } = context.switchToHttp().getRequest();
-    const isMember = user?.sub && tenant && (await this.tenantRepository.isActiveMember(tenant.tenant_id, user.sub));
-    if (!isMember) {
+    // Root administers every tenant and is the only user allowed in the admin context (no tenant).
+    const allowed =
+      user?.sub &&
+      ((tenant && (await this.tenantRepository.isActiveMember(tenant.tenant_id, user.sub))) ||
+        (await this.roleRepository.isRoot(user.sub)));
+    if (!allowed) {
       throw new ForbiddenException({
         statusCode: 403,
         message: 'Not an active member of this tenant',

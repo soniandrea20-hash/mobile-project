@@ -1,31 +1,28 @@
 import { Tenant } from "./tenant.entity";
+import type { StoreRow } from "src/stores/domain/store.repository";
 
 export const TENANT_REPOSITORY = Symbol('TENANT_REPOSITORY')
 
-export interface CreateTenantData {
-  name: string;
+export interface TenantRow extends Tenant {
+    created_at: Date;
 }
 
-export interface ResponseTenantData {
-    tenant_id:string;
+export interface CreateTenantData {
     name: string;
     slug: string;
-    is_active: boolean;
+    store: { name: string; slug: string; address: string | null };
+    ownerId: string;
 }
 
-export interface ResponseUpdateTenant {
-    tenant_id?:string;
+export interface TenantPatch {
     name?: string;
     is_active?: boolean;
 }
 
 export interface ITenantRepository{
-    create(tenant:CreateTenantData):Promise<ResponseTenantData>;
-    update(tenantId: string, tenant: ResponseUpdateTenant):Promise<ResponseTenantData>;
-    delete(id:string):Promise<boolean>;
-    getAll():Promise<Tenant[]>;
-    getById(id:string):Promise<Tenant | null>;
-    getByName(name:string):Promise<Tenant | null>;
+    list():Promise<TenantRow[]>;
+    update(tenantId: string, patch: TenantPatch):Promise<TenantRow | null>;
+    createWithOwner(data: CreateTenantData):Promise<{ tenant: TenantRow; store: StoreRow }>;
     findBySlug(slug:string):Promise<Tenant | null>;
     isActiveMember(tenantId:string, userId:string):Promise<boolean>;
     isStoreOfTenant(tenantId:string, storeId:string):Promise<boolean>;

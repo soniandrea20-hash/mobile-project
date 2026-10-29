@@ -1,9 +1,18 @@
-import { ConflictException, Inject, Injectable, NotFoundException } from "@nestjs/common";
-import { CreateTenantData, ITenantRepository, ResponseTenantData, ResponseUpdateTenant } from "../domain/tenant.repository";
-import { Tenant } from "../domain/tenant.entity";
-import { Repository } from "typeorm";
-import { TenantOrmEntity } from "./tenant.orm-entity";
+import { Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
+import { Repository } from "typeorm";
+import { Tenant } from "../domain/tenant.entity";
+import { invalidSlug, slugTaken } from "../domain/tenant.errors";
+import { CreateTenantData, ITenantRepository, TenantPatch, TenantRow } from "../domain/tenant.repository";
+import { TenantOrmEntity } from "./tenant.orm-entity";
+
+const TENANT_COLUMNS = 'tenant_id, name, slug, is_active, created_at';
+const STORE_COLUMNS = 'store_id, name, slug, address, phone, whatsapp_number, is_active, created_at';
+const UPDATABLE = ['name', 'is_active'] as const;
+const UNIQUE_VIOLATION = '23505';
+const CHECK_VIOLATION = '23514';
+
+const pgCode = (error: any): string | undefined => error?.driverError?.code ?? error?.code;
 
 @Injectable()
 export class PostgreTenantRepository implements ITenantRepository{
@@ -12,79 +21,54 @@ export class PostgreTenantRepository implements ITenantRepository{
         @InjectRepository(TenantOrmEntity)
         private readonly tenantDb: Repository<TenantOrmEntity>
     ){}
-    async create(tenant: CreateTenantData): Promise<ResponseTenantData> {
-        const entity = this.tenantDb.create(tenant);
-        const saved = await this.tenantDb.save(entity);
-        return {
-            tenant_id: saved.tenant_id,
-            name: saved.name,
-            slug: saved.slug,
-            is_active: saved.is_active
-        }
-    }
-    async update(tenantId:string, tenant: ResponseUpdateTenant): Promise<ResponseTenantData> {
 
-        await this.tenantDb.update(tenantId, tenant);
+    list(): Promise<TenantRow[]> {
+        return this.tenantDb.manager.query(`SELECT ${TENANT_COLUMNS} FROM tenants ORDER BY created_at, tenant_id`);
+    }
 
-        const saved = await this.tenantDb.findOne({
-            where: {
-                tenant_id: tenantId
-            }
-        });
-        if (!saved) {
-            throw new NotFoundException(`El tenant con ID ${tenantId} no existe`);
-        }
-        
-        return {
-            tenant_id: saved.tenant_id,
-            name: saved.name,
-            slug: saved.slug,
-            is_active: saved.is_active
+    async update(tenantId: string, patch: TenantPatch): Promise<TenantRow | null> {
+        const fields = UPDATABLE.filter((field) => patch[field] !== undefined);
+        const sets = fields.map((field, i) => `${field} = $${i + 2}`).join(', ');
+        // pg returns [rows, affectedCount] for UPDATE
+        const [rows] = await this.tenantDb.manager.query(
+            `UPDATE tenants SET ${sets} WHERE tenant_id = $1 RETURNING ${TENANT_COLUMNS}`,
+            [tenantId, ...fields.map((field) => patch[field])],
+        );
+        return rows[0] ?? null;
+    }
+
+    // Mirrors database/seeds/dev_local1.sql: the owner needs the three links to operate the tenant.
+    async createWithOwner(data: CreateTenantData) {
+        try {
+            return await this.tenantDb.manager.transaction(async (tx) => {
+                const [tenant] = await tx.query(
+                    `INSERT INTO tenants (name, slug) VALUES ($1, $2) RETURNING ${TENANT_COLUMNS}`,
+                    [data.name, data.slug],
+                );
+                const [store] = await tx.query(
+                    `INSERT INTO stores (tenant_id, name, slug, address) VALUES ($1, $2, $3, $4) RETURNING ${STORE_COLUMNS}`,
+                    [tenant.tenant_id, data.store.name, data.store.slug, data.store.address],
+                );
+                const owner = await tx.query(
+                    `INSERT INTO users_tenants (user_id, tenant_id, role_id)
+                     SELECT $1, $2, role_id FROM roles WHERE name = 'owner' RETURNING role_id`,
+                    [data.ownerId, tenant.tenant_id],
+                );
+                if (owner.length === 0) throw new Error("Role 'owner' is missing; run db:apply");
+                await tx.query(`INSERT INTO users_stores (user_id, store_id) VALUES ($1, $2)`, [data.ownerId, store.store_id]);
+                await tx.query(
+                    `INSERT INTO users_roles (user_id, role_id) SELECT $1, role_id FROM roles WHERE name = 'owner' ON CONFLICT DO NOTHING`,
+                    [data.ownerId],
+                );
+                return { tenant, store };
+            });
+        } catch (error) {
+            if (pgCode(error) === UNIQUE_VIOLATION) throw slugTaken();
+            if (pgCode(error) === CHECK_VIOLATION) throw invalidSlug();
+            throw error;
         }
     }
-    async delete(id: string): Promise<boolean> {
-        const result = await this.tenantDb.update(id, { is_active: false });
-        if (result.affected === 0) {
-            return false;
-        }
-        return true;
-    }
-    async getAll(): Promise<Tenant[]> {
-        const entities = this.tenantDb.find({
-            where: {
-                is_active: true
-            }
-        });
-        return entities;
-    }
-    async getById(id:string): Promise<Tenant> {
-        const entity = await this.tenantDb.findOne({
-            where: {
-                tenant_id: id,
-                is_active: true
-            }
-        });
-        if (!entity) {
-            throw new NotFoundException(`El tenant con ID ${id} no existe`);
-        }
-        return entity;
-    }
-    async getByName(name:string): Promise<Tenant | null> {
-        const tenant = await this.tenantDb.findOne({
-            where: {
-                name: name.toLocaleLowerCase().trim()
-            }
-        })
-        if (!tenant) {
-            return null;
-        }
-        return {
-            tenant_id: tenant.tenant_id,
-            name: tenant.name,
-            slug: tenant.slug,
-            is_active: tenant.is_active
-        }
-    }
+
     async findBySlug(slug:string): Promise<Tenant | null> {
         return this.tenantDb.findOne({ where: { slug } });
     }

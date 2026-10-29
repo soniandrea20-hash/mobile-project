@@ -8,4 +8,5 @@ export interface IRoleRepository{
     getById(id:string):Promise<Role | null>;
     getPermissionsByRoleId(roleId:string):Promise<Permission[]>;
     getPermissionCodesByUserId(userId:string):Promise<string[]>;
+    isRoot(userId:string):Promise<boolean>;
 }

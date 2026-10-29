@@ -1,5 +1,6 @@
-const SLUG_FORMAT = /^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$/;
+export const SLUG_FORMAT = /^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$/;
 const RESERVED_SLUGS = ['www', 'api', 'app', 'admin'];
+export const ADMIN_SLUG = 'admin';
 
 export function isValidSlug(slug: string): boolean {
   return SLUG_FORMAT.test(slug) && !RESERVED_SLUGS.includes(slug);

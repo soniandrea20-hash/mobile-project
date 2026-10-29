@@ -671,7 +671,7 @@ Categorías de causa raíz para clasificar: requisito ambiguo, diseño, código,
 | Unitarias | | Jest | Ya usado en `backend/test` |
 | Otras | | Lighthouse, axe, gitleaks, SSL Labs | Rendimiento web, accesibilidad, secretos y HTTPS |
 
-Pruebas manuales de API: `backend/http/` tiene un archivo `.http` por recurso con los 32 endpoints de R1 y sus errores documentados (extensión REST Client de VS Code). Requiere el backend en `http://localhost:3000` y el seed `database/seeds/dev_local1.sql` (tenant `local1`, dueño `owner@local1.test`); cada archivo hace su propio login y encadena los ids. Las muestras para subir archivos están en `backend/http/samples/`. No hay empleado en el seed: para probar 403 hay que crearlo a mano.
+Pruebas manuales de API: `backend/http/` tiene un archivo `.http` por recurso con los 35 endpoints de R1 y sus errores documentados (extensión REST Client de VS Code). `admin/admin.http` no necesita seed: solo `db:apply`, registra al administrador y crea un tenant con su dueño (#76). El resto requiere el backend en `http://localhost:3000` y el seed `database/seeds/dev_local1.sql` (tenant `local1`, dueño `owner@local1.test`); cada archivo hace su propio login y encadena los ids. Las muestras para subir archivos están en `backend/http/samples/`. No hay empleado en el seed: para probar 403 hay que crearlo a mano.
 
 Referencias de madurez: ISO/IEC 25000 (SQuaRE) como marco de calidad, CMMI niveles 3 a 5 como horizonte de madurez de procesos y automatización eficiente como práctica de base.
 
@@ -928,18 +928,18 @@ Manual (`npm run db:apply` from `backend/`; seed run by hand):
 
 Automated (`backend/test/tenants`):
 - `tenant-slug.spec.ts`: `extractSlugFromHost` gives the slug for `local1.localhost` (with port) and `local1.mostrador.io`, case-insensitive; `null` for the bare domain, IPs, foreign hosts and nested subdomains. `isValidSlug` accepts 3 to 30 chars in lowercase, digits and hyphen; rejects 2 and 31 chars, uppercase, `_`, leading or trailing hyphen, and `www`, `api`, `app`, `admin` (TC-004, TC-010).
-- `tenant.middleware.spec.ts` (mocked repository): resolves the tenant from Host and sets `req.tenant` (TC-008); uses `X-Tenant-Slug` only when Host gives no slug; ignores the header when Host has a slug; 404 `TENANT_NOT_FOUND` without a lookup for a missing, invalid or reserved slug (TC-010); 404 for an unknown or inactive tenant (TC-009).
+- `tenant.middleware.spec.ts` (mocked repository): resolves the tenant from Host and sets `req.tenant` (TC-008); uses `X-Tenant-Slug` only when Host gives no slug; ignores the header when Host has a slug; 404 `TENANT_NOT_FOUND` without a lookup for a missing, invalid or reserved slug other than `admin` (TC-010; `admin` is the platform context, see #76); 404 for an unknown or inactive tenant (TC-009).
 
 Manual (backend running with `BASE_DOMAIN=localhost` and the dev seed):
 - `curl -H "Host: local1.localhost:3000" /products`: reaches the handler.
 - `curl -H "Host: nope.localhost:3000" /products`: 404 with `code: "TENANT_NOT_FOUND"` in the default Nest error format.
 - `curl -H "X-Tenant-Slug: local1" http://127.0.0.1:3000/products`: reaches the handler; with `Host: local1.localhost` and `X-Tenant-Slug: other` the Host wins.
 - Tenant with `is_active = false`: 404 `TENANT_NOT_FOUND`.
-- `POST /auth/login` without a tenant: not gated (`/auth/*` is excluded).
+- `POST /auth/login` without a tenant: not gated (the middleware lets `/auth/*` through when no tenant resolves).
 - CORS preflight (`OPTIONS` with `Origin: http://local1.localhost:8081` and `https://local1.mostrador.io`): allowed, with `X-Tenant-Slug` in the allowed headers; `Origin: https://evil.com` gets no `Access-Control-Allow-Origin`; `ETag` is exposed.
 - `BASE_DOMAIN=mostrador.io`: `Host: local1.mostrador.io` resolves; `local1.localhost` falls to the header.
 - Non-functional: with the unique index `uq_tenants_slug` the lookup is one indexed query per request; load case TC-130 (k6) stays pending until the stores endpoints exist.
-- Known gap: `POST /tenants` style creation does not set `slug` yet (NOT NULL in DB); covered by the tenant admin card.
+- Tenant creation (with `slug`) is covered by #76 below.
 
 
 ### Reglas críticas del backend (#45, RF-007, RF-029, RF-030, RF-032, RNF-012)
@@ -951,3 +951,28 @@ Automated (`backend/test`):
 - Ya cubiertos antes: login uniforme 401 (`login-user.spec.ts`), `NOT_A_MEMBER` (`membership.guard.spec.ts`), 403 por permiso (`permissions.guard.spec.ts`), 404 por recurso de otro tenant en cada caso de uso (`*.use-cases.spec.ts`, `get-playlist.use-case.spec.ts`).
 
 Pending: supertest con base para el aislamiento en SQL (TC-121, TC-122, TC-209, TC-210), la concurrencia (TC-172) y las pruebas k6 de carga.
+
+### Administrador de la plataforma (#76, RF-001, RF-035, RNF-012)
+
+Automated (`backend/test`):
+- `tenants/tenant.middleware.spec.ts`: el slug `admin` (Host `admin.<base>` o `X-Tenant-Slug: admin`) marca `req.platformAdmin`, no adjunta tenant y no consulta la base; en ese contexto pasan `/auth/*`, `/me`, `/tenants` y `/tenants/:id?x=1`, y `/stores`, `/orders`, `/public/...`, `/media/...` y `/tenantsx` dan 404 `TENANT_NOT_FOUND` (sin fuga de rutas con tenant); `/auth/*` pasa sin tenant cuando el Host no resuelve ninguno (TC-007, TC-010).
+- `auth/register-user.spec.ts`: en el contexto admin el primer registro usa `createRoot` (rol `root`); si ya hay `root` responde 403 `ADMIN_ALREADY_EXISTS` sin crear; un email repetido sigue dando 409; fuera del contexto admin se usa `create` como antes.
+- `tenants/membership.guard.spec.ts` y `roles/permissions.guard.spec.ts`: `root` pasa ambos guards en cualquier tenant sin ser miembro ni tener el permiso; en el contexto admin (sin tenant) solo `root` pasa y los demas reciben `NOT_A_MEMBER` (TC-007).
+- `tenants/tenants.use-cases.spec.ts`: listado; alta con dueno registrado (tenant + local + vinculo, devuelve `web_origin` y `self_order_url`); 404 `USER_NOT_FOUND`; 400 `INVALID_SLUG` con `admin`, `www`, `api`, `app` y un slug con formato invalido sin crear nada (TC-002, TC-004); PATCH de `name` e `is_active`, 400 `EMPTY_UPDATE`, 404 `TENANT_NOT_FOUND`.
+- `auth/get-me.use-case.spec.ts`: en el contexto admin `tenant: null`, `stores: []`, permisos de `root` e `is_root: true`; en un tenant, `is_root: false` para el dueno.
+- `roles/route-permissions.spec.ts`: toda ruta de `/tenants` exige `tenants:*` y ningun permiso del dueno o del empleado alcanza (TC-007).
+
+Manual (backend corriendo, base con `db:apply` sin la semilla de desarrollo, `BASE_DOMAIN=localhost`; archivo `backend/http/admin/admin.http`):
+- `POST /auth/register` con `X-Tenant-Slug: admin`: 201; el usuario queda con rol `root` (`select * from users_roles` con el rol `root`). Un segundo registro con otro email: 403 `ADMIN_ALREADY_EXISTS` y no se crea el usuario. El mismo email: 409.
+- Registro sin `admin` (por ejemplo `X-Tenant-Slug: local1` o sin encabezado): crea un usuario comun sin rol.
+- Login del `root` y `GET /me` con `X-Tenant-Slug: admin`: `tenant: null`, `stores: []`, `permissions` con los tres `tenants:*`, `is_root: true`. Con `X-Tenant-Slug: <tenant>`: devuelve ese tenant y sus locales, `is_root: true`.
+- `GET /stores`, `GET /orders` y `GET /public/stores/x/catalog` con `X-Tenant-Slug: admin`: 404 `TENANT_NOT_FOUND`.
+- Registrar al dueno (`POST /auth/register` sin `admin`), luego `POST /tenants` con `owner_email`: 201 con tenant, local y URLs; el dueno hace login y `GET /me` con el slug nuevo devuelve el tenant y su local, sin la semilla. `owner_email` no registrado: 404 `USER_NOT_FOUND`. Slug repetido: 409 `SLUG_TAKEN`. Slug `admin`: 400 `INVALID_SLUG`; slug de local `screen`: 400 `INVALID_SLUG` (restriccion de la base) y no queda ningun tenant creado (transaccion).
+- `GET /tenants` lista los tenants con `created_at`; `PATCH /tenants/:id` con `{ "is_active": false }` hace que el Host del tenant responda 404 `TENANT_NOT_FOUND`; con `{}` da 400 `EMPTY_UPDATE`; `slug` en el body se descarta.
+- Con el token del dueno: `GET /tenants` y `POST /tenants` en `admin` dan 403 `NOT_A_MEMBER`; en su propio tenant dan 403 por permiso (TC-007).
+- `root` con `X-Tenant-Slug: <tenant>`: `GET /stores` y las rutas con permisos responden sin ser miembro.
+- Concurrencia: dos `POST /auth/register` simultaneos en `admin` con emails distintos y sin `root`: un solo 201 y un 403; `select count(*)` de usuarios con rol `root` es 1 (candado `pg_advisory_xact_lock`).
+- Idempotencia del script: ejecutar `npm run db:apply` dos veces; la segunda aplica 0 y no duplica permisos.
+- No funcional: `PermissionsGuard` y `MembershipGuard` agregan una consulta indexada (`users_roles` por clave primaria) por solicitud protegida; medir en la corrida k6 de R2 (TC-112).
+
+Pending: supertest con base para la concurrencia del primer registro y el alta transaccional (TC-001, TC-003, TC-129).

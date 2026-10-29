@@ -23,6 +23,30 @@ export class PostgreUserRepository implements IUserRepository{
             created_at: saved.created_at.toISOString()
         }
     }
+    async createRoot(user: CreateUserData): Promise<ResponseUserData | null> {
+        return this.userDb.manager.transaction(async (tx) => {
+            // Serializes concurrent first registrations: the second one waits and then sees the root.
+            await tx.query('SELECT pg_advisory_xact_lock(hashtext($1))', ['mostrador.first-root']);
+            const existing = await tx.query(
+                "SELECT 1 FROM users_roles ur JOIN roles r ON r.role_id = ur.role_id WHERE r.name = 'root' LIMIT 1",
+            );
+            if (existing.length > 0) return null;
+
+            const saved = await tx.save(tx.create(UserOrmEntity, user));
+            const granted = await tx.query(
+                "INSERT INTO users_roles (user_id, role_id) SELECT $1, role_id FROM roles WHERE name = 'root' RETURNING role_id",
+                [saved.user_id],
+            );
+            if (granted.length === 0) throw new Error("Role 'root' is missing; run db:apply");
+            return {
+                user_id: saved.user_id,
+                email: saved.email,
+                first_name: saved.first_name,
+                last_name: saved.last_name,
+                created_at: saved.created_at.toISOString()
+            };
+        });
+    }
     update(users: User): Promise<ResponseUserData> {
         throw new Error("Method not implemented.");
     }

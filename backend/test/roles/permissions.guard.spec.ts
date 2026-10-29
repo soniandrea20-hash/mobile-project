@@ -5,7 +5,7 @@ describe('PermissionsGuard', () => {
   let guard: PermissionsGuard;
 
   const reflector = { getAllAndOverride: jest.fn() };
-  const roleRepository = { getPermissionCodesByUserId: jest.fn() };
+  const roleRepository = { getPermissionCodesByUserId: jest.fn(), isRoot: jest.fn() };
 
   const buildContext = (user?: { sub: string }) => {
     const request: any = { user };
@@ -23,6 +23,7 @@ describe('PermissionsGuard', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    roleRepository.isRoot.mockResolvedValue(false);
     guard = new PermissionsGuard(reflector as any, roleRepository as any);
   });
 
@@ -61,5 +62,13 @@ describe('PermissionsGuard', () => {
 
     await expect(guard.canActivate(buildContext({ sub: 'u1' }))).resolves.toBe(true);
     expect(roleRepository.getPermissionCodesByUserId).toHaveBeenCalledWith('u1');
+  });
+
+  it('debe permitir a root cualquier permiso sin consultar los codigos', async () => {
+    mockMetadata(false, ['anything:delete']);
+    roleRepository.isRoot.mockResolvedValue(true);
+
+    await expect(guard.canActivate(buildContext({ sub: 'root' }))).resolves.toBe(true);
+    expect(roleRepository.getPermissionCodesByUserId).not.toHaveBeenCalled();
   });
 });

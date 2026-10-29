@@ -16,18 +16,21 @@ export class GetMeUseCase {
         private readonly storeRepository: IStoreRepository,
     ){}
 
-    async execute(tenant: Tenant, userId: string){
-        const [user, stores, permissions] = await Promise.all([
+    // tenant is undefined in the platform admin context.
+    async execute(tenant: Tenant | undefined, userId: string){
+        const [user, stores, permissions, isRoot] = await Promise.all([
             this.userRepository.getById(userId),
-            this.storeRepository.list(tenant.tenant_id),
+            tenant ? this.storeRepository.list(tenant.tenant_id) : [],
             this.roleRepository.getPermissionCodesByUserId(userId),
+            this.roleRepository.isRoot(userId),
         ]);
 
         return {
             user: { user_id: user!.user_id, email: user!.email, first_name: user!.first_name, last_name: user!.last_name },
-            tenant: { tenant_id: tenant.tenant_id, name: tenant.name, slug: tenant.slug },
+            tenant: tenant ? { tenant_id: tenant.tenant_id, name: tenant.name, slug: tenant.slug } : null,
             stores: stores.filter((s) => s.is_active).map(({ store_id, name, slug }) => ({ store_id, name, slug })),
             permissions,
+            is_root: isRoot,
         };
     }
 }

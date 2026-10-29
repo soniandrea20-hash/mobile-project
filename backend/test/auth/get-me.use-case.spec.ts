@@ -3,7 +3,7 @@ import { GetMeUseCase } from 'src/auth/application/get-me.use-case';
 describe('GetMeUseCase', () => {
   const tenant = { tenant_id: 't1', name: 'Local Uno', slug: 'local1', is_active: true } as any;
   const userRepository = { getById: jest.fn() };
-  const roleRepository = { getPermissionCodesByUserId: jest.fn() };
+  const roleRepository = { getPermissionCodesByUserId: jest.fn(), isRoot: jest.fn() };
   const storeRepository = { list: jest.fn() };
   const store = (over: object = {}) => ({ store_id: 's1', name: 'Palermo', slug: 'palermo', is_active: true, address: null, ...over });
 
@@ -13,6 +13,7 @@ describe('GetMeUseCase', () => {
       user_id: 'u1', email: 'juan@correo.com', first_name: 'Juan', last_name: 'Perez', created_at: 'x',
     });
     roleRepository.getPermissionCodesByUserId.mockResolvedValue(['orders:read', 'orders:update']);
+    roleRepository.isRoot.mockResolvedValue(false);
     storeRepository.list.mockResolvedValue([store(), store({ store_id: 's2', slug: 'centro', is_active: false })]);
   });
 
@@ -26,6 +27,17 @@ describe('GetMeUseCase', () => {
       tenant: { tenant_id: 't1', name: 'Local Uno', slug: 'local1' },
       stores: [{ store_id: 's1', name: 'Palermo', slug: 'palermo' }],
       permissions: ['orders:read', 'orders:update'],
+      is_root: false,
     });
+  });
+
+  it('en el contexto admin (sin tenant) devuelve tenant null, sin locales y los permisos de root', async () => {
+    roleRepository.isRoot.mockResolvedValue(true);
+    roleRepository.getPermissionCodesByUserId.mockResolvedValue(['tenants:read']);
+
+    const me = await new GetMeUseCase(userRepository as any, roleRepository as any, storeRepository as any).execute(undefined, 'u1');
+
+    expect(storeRepository.list).not.toHaveBeenCalled();
+    expect(me).toMatchObject({ tenant: null, stores: [], permissions: ['tenants:read'], is_root: true });
   });
 });

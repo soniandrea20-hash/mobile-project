@@ -9,7 +9,7 @@ export class MeController {
   constructor(private readonly getMe: GetMeUseCase) {}
 
   @Get()
-  me(@CurrentTenant() tenant: Tenant, @CurrentUserId() userId: string) {
+  me(@CurrentTenant() tenant: Tenant | undefined, @CurrentUserId() userId: string) {
     return this.getMe.execute(tenant, userId);
   }
 }

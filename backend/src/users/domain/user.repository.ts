@@ -24,6 +24,8 @@ export interface ResponseUserDataWithPass extends ResponseUserData {
 
 export interface IUserRepository{
     create(users:CreateUserData):Promise<ResponseUserData>;
+    // Creates the user with the root role, or returns null when a root already exists.
+    createRoot(users:CreateUserData):Promise<ResponseUserData | null>;
     update(users:User):Promise<ResponseUserData>;
     delete(id:string):boolean;
     getAll():Promise<User[]>;

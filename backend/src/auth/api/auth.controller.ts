@@ -4,6 +4,7 @@ import {
   HttpCode,
   HttpStatus,
   Post,
+  Req,
 } from '@nestjs/common';
 import { RegisterUserDto } from './dto/create-user.dto';
 import { RegisterUseCase } from '../application/register.use-case'
@@ -20,8 +21,8 @@ export class AuthController {
   ) {}
 
   @Post('/register')
-  create(@Body() registerUserDto: RegisterUserDto) {
-    return this.registerUseCase.execute(registerUserDto);
+  create(@Body() registerUserDto: RegisterUserDto, @Req() req: { platformAdmin?: boolean }) {
+    return this.registerUseCase.execute(registerUserDto, req.platformAdmin === true);
   }
 
   @Post('/login')

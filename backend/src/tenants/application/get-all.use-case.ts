@@ -1,7 +1,5 @@
-import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException, UnauthorizedException } from "@nestjs/common";
-import { UpdateTenantCommand } from "./commands/update.command";
+import { Inject, Injectable } from "@nestjs/common";
 import { TENANT_REPOSITORY, type ITenantRepository } from "../domain/tenant.repository";
-import { Tenant } from "../domain/tenant.entity";
 
 @Injectable()
 export class GetAllTenantsUseCase {
@@ -11,9 +9,7 @@ export class GetAllTenantsUseCase {
         private readonly tenantRepository: ITenantRepository,
     ){}
 
-    async execute(){
-        
-        const tenants = await this.tenantRepository.getAll();
-        return tenants;
+    execute(){
+        return this.tenantRepository.list();
     }
 }
