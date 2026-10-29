@@ -939,3 +939,13 @@ Manual (backend running with `BASE_DOMAIN=localhost` and the dev seed):
 - Non-functional: with the unique index `uq_tenants_slug` the lookup is one indexed query per request; load case TC-130 (k6) stays pending until the stores endpoints exist.
 - Known gap: `POST /tenants` style creation does not set `slug` yet (NOT NULL in DB); covered by the tenant admin card.
 
+
+### Reglas críticas del backend (#45, RF-007, RF-029, RF-030, RF-032, RNF-012)
+
+Automated (`backend/test`):
+- `orders/order-status.spec.ts`: recorre los 25 pares de estados y acepta solo las 6 transiciones del contrato 9.4 (TC-100).
+- `orders/create-order.dto.spec.ts` (con el `ValidationPipe` de `main.ts`): cantidad 1 y 50 válidas; 0, 51, negativa, decimal y texto rechazadas con 400; `items` de 1 a 50 líneas; producto repetido y `product_id` no uuid rechazados; `price`, `unit_price` y `total` del cliente se descartan (TC-093). El recálculo con los precios de la base está en `create-order.use-case.spec.ts`.
+- `roles/route-permissions.spec.ts`: toda ruta privada de productos, categorías, contenido, pantallas, locales y órdenes declara permisos; con los permisos del empleado del seed no puede editar catálogo, contenido, pantallas ni locales, ni leer contenido/pantallas, y sí leer y cambiar el estado de órdenes (RF-007, RNF-012).
+- Ya cubiertos antes: login uniforme 401 (`login-user.spec.ts`), `NOT_A_MEMBER` (`membership.guard.spec.ts`), 403 por permiso (`permissions.guard.spec.ts`), 404 por recurso de otro tenant en cada caso de uso (`*.use-cases.spec.ts`, `get-playlist.use-case.spec.ts`).
+
+Pending: supertest con base para el aislamiento en SQL (TC-121, TC-122, TC-209, TC-210), la concurrencia (TC-172) y las pruebas k6 de carga.

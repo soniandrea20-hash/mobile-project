@@ -1,5 +1,5 @@
 import { ConflictException } from '@nestjs/common';
-import { allowedTransitions, assertTransition } from 'src/orders/domain/order-status';
+import { ORDER_STATUSES, allowedTransitions, assertTransition } from 'src/orders/domain/order-status';
 
 describe('Order status transitions', () => {
   it('debe permitir solo el siguiente estado o cancelar', () => {
@@ -15,6 +15,15 @@ describe('Order status transitions', () => {
 
   it('debe aceptar una transicion valida', () => {
     expect(() => assertTransition('generada', 'en_preparacion')).not.toThrow();
+  });
+
+  it('debe aceptar exactamente las transiciones del contrato y rechazar el resto', () => {
+    const statuses = ORDER_STATUSES;
+    const valid = new Set(['generada>en_preparacion', 'generada>cancelada', 'en_preparacion>lista', 'en_preparacion>cancelada', 'lista>entregada', 'lista>cancelada']);
+    for (const from of statuses) for (const to of statuses) {
+      const ok = (() => { try { assertTransition(from, to); return true; } catch { return false; } })();
+      expect({ from, to, ok }).toEqual({ from, to, ok: valid.has(`${from}>${to}`) });
+    }
   });
 
   it.each([
