@@ -1,4 +1,3 @@
-
 import { Platform } from 'react-native';
 
 export type Product = {
@@ -33,12 +32,34 @@ type PublicCatalogResponse = {
   }[];
 };
 
+export type PublicProduct = {
+  product_id: string;
+  name: string;
+  description: string | null;
+  price: string;
+  image_url: string | null;
+};
+
+export type CatalogCategory = {
+  category_id: string;
+  name: string;
+  products: PublicProduct[];
+};
+
+export type PublicCatalog = {
+  store: {
+    store_id: string;
+    name: string;
+    slug: string;
+  };
+  categories: CatalogCategory[];
+};
+
 const API_URL =
   process.env.EXPO_PUBLIC_API_URL ||
   (Platform.OS === 'android'
     ? 'http://10.0.2.2:3000'
     : 'http://localhost:3000');
-
 const TENANT_SLUG = process.env.EXPO_PUBLIC_TENANT_SLUG || 'local3';
 const STORE_SLUG = process.env.EXPO_PUBLIC_STORE_SLUG || 'centro';
 
@@ -56,6 +77,19 @@ async function request<T>(path: string): Promise<T> {
   }
 
   return response.json() as Promise<T>;
+}
+
+export function getPublicCatalog(
+  storeSlug: string,
+): Promise<PublicCatalog> {
+  if (!TENANT_SLUG) {
+    throw new Error('Falta configurar EXPO_PUBLIC_TENANT_SLUG.');
+  }
+
+  return request<PublicCatalog>(
+    `/public/stores/${encodeURIComponent(storeSlug)}/catalog`,
+    { 'X-Tenant-Slug': TENANT_SLUG },
+  );
 }
 
 export async function getProducts(): Promise<Product[]> {
