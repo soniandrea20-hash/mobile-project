@@ -38,12 +38,13 @@ export class CreateContentUseCase {
         if (input.file.length > media.maxBytes) throw mediaTooLarge(media.type === 'image' ? '5 MB' : '50 MB');
         if (media.type === 'video' && input.duration_seconds !== undefined) throw durationNotAllowed();
 
+        // Measured before saving so an invalid video is never stored.
+        const duration = media.type === 'video'
+            ? await this.measureVideo(input.file)
+            : input.duration_seconds ?? (Number(process.env.DEFAULT_IMAGE_SECONDS) || 10);
+
         const filePath = await this.storage.save(tenantId, input.file, media.ext);
         try {
-            const duration = media.type === 'video'
-                ? await this.measureVideo(filePath)
-                : input.duration_seconds ?? (Number(process.env.DEFAULT_IMAGE_SECONDS) || 10);
-
             const row = await this.contentRepository.create(tenantId, {
                 store_id: input.store_id,
                 type: media.type,
@@ -60,10 +61,10 @@ export class CreateContentUseCase {
         }
     }
 
-    private async measureVideo(filePath: string){
+    private async measureVideo(video: Buffer){
         let seconds: number;
         try {
-            seconds = await this.videoProbe.durationSeconds(filePath);
+            seconds = await this.videoProbe.durationSeconds(video);
         } catch {
             throw mediaUnreadable();
         }

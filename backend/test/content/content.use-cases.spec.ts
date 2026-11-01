@@ -118,20 +118,21 @@ describe('Content use cases', () => {
       probe.durationSeconds.mockResolvedValue(42);
       await useCase().execute(tenant, input({ file: MP4, original_name: 'v.mp4' }));
 
-      expect(probe.durationSeconds).toHaveBeenCalledWith('t1/content/v.mp4');
+      expect(probe.durationSeconds).toHaveBeenCalledWith(MP4);
       expect(repo.create).toHaveBeenCalledWith('t1', expect.objectContaining({ type: 'video', mime_type: 'video/mp4', duration_seconds: 42 }));
     });
 
-    it('video: exactamente 60 s se acepta; 61 da 422 VIDEO_TOO_LONG y borra el archivo', async () => {
+    it('video: exactamente 60 s se acepta; 61 da 422 VIDEO_TOO_LONG sin guardar el archivo', async () => {
       storage.save.mockResolvedValue('t1/content/v.mp4');
       probe.durationSeconds.mockResolvedValueOnce(60);
       await useCase().execute(tenant, input({ file: MP4 }));
+      expect(storage.save).toHaveBeenCalledTimes(1);
 
       probe.durationSeconds.mockResolvedValueOnce(61);
       const error: any = await useCase().execute(tenant, input({ file: MP4 })).catch((e) => e);
       expect(error.getStatus()).toBe(422);
       expect(error.getResponse()).toMatchObject({ code: 'VIDEO_TOO_LONG' });
-      expect(storage.remove).toHaveBeenCalledWith('t1/content/v.mp4');
+      expect(storage.save).toHaveBeenCalledTimes(1);
     });
 
     it('video: 52 428 801 bytes da 413 y 52 428 800 se acepta', async () => {
@@ -142,13 +143,21 @@ describe('Content use cases', () => {
       expect(error.getStatus()).toBe(413);
     });
 
-    it('video: ffprobe falla -> 422 MEDIA_UNREADABLE y borra el archivo', async () => {
+    it('video: ffprobe falla -> 422 MEDIA_UNREADABLE sin guardar el archivo', async () => {
       probe.durationSeconds.mockRejectedValue(new Error('boom'));
       const error: any = await useCase().execute(tenant, input({ file: MP4 })).catch((e) => e);
       expect(error.getStatus()).toBe(422);
       expect(error.getResponse()).toMatchObject({ code: 'MEDIA_UNREADABLE' });
-      expect(storage.remove).toHaveBeenCalledWith('t1/content/new.jpg');
+      expect(storage.save).not.toHaveBeenCalled();
       expect(repo.create).not.toHaveBeenCalled();
+    });
+
+    it('video: borra el archivo si falla el insert', async () => {
+      storage.save.mockResolvedValue('t1/content/v.mp4');
+      probe.durationSeconds.mockResolvedValue(10);
+      repo.create.mockRejectedValue(new Error('db'));
+      await expect(useCase().execute(tenant, input({ file: MP4 }))).rejects.toThrow('db');
+      expect(storage.remove).toHaveBeenCalledWith('t1/content/v.mp4');
     });
 
     it('video: duration_seconds enviado da 422 sin guardar el archivo', async () => {

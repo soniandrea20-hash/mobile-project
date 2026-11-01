@@ -21,6 +21,7 @@
     "db:apply": "node --env-file=.env -r ts-node/register scripts/db/apply-scripts.ts"
   },
   "dependencies": {
+    "@azure/storage-blob": "^12.34.0",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^12.0.1",
     "@nestjs/core": "^11.0.1",

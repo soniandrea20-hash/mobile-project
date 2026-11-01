@@ -9,6 +9,6 @@ export interface IContentStorage {
 }
 
 export interface IVideoProbe {
-    // Duration in seconds, rounded up, of a stored file. Rejects if it cannot be read.
-    durationSeconds(filePath: string): Promise<number>;
+    // Duration in seconds, rounded up, of a video. Rejects if it cannot be read.
+    durationSeconds(video: Buffer): Promise<number>;
 }

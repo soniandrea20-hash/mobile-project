@@ -32,12 +32,12 @@ Componentes: backoffice (Expo / React Native, Android y web), backend (NestJS + 
 **Releases.** El MVP se entrega en dos releases (detalle y fechas en `docs/planificacion.md`):
 
 - **R1, demo del lunes 02/11/2026:** tenant con slug y subdominio (`local1.localhost` en local), login y roles, backoffice (categorías, productos, contenido de pantalla, pantallas con token, órdenes con cambio de estado, WhatsApp del local), reproductor de pantalla con QR y consulta de cambios, autopedido (catálogo, carrito de 1 a 50 por producto, confirmación, orden guardada y enlace `wa.me` dividido en partes cuando el mensaje es largo) y local sin número de WhatsApp con la orden visible en el backoffice. En R1 el local es único por tenant (se ve y se edita) y el producto tiene imagen (RF-012). R1 incluye también la integridad del pedido y del mensaje (RNF-001) y el QR legible a distancia (RNF-009).
-- **R2, desde el 03/11/2026:** catálogo desde una foto con IA, varios locales por tenant con empleados asignados, regeneración del token de pantalla, tenant suspendido, panel Root, métricas, despliegue de producción con certificado wildcard y todo lo que no hace falta para la demostración de punta a punta de R1.
+- **R2, desde el 03/11/2026:** catálogo desde una foto con IA, varios locales por tenant con empleados asignados, regeneración del token de pantalla, ubicación del local por GPS desde el backoffice, tenant suspendido, panel Root, métricas, despliegue de producción con certificado wildcard y todo lo que no hace falta para la demostración de punta a punta de R1.
 
 | Release | Historias de usuario |
 | --- | --- |
 | R1 | HU-02, HU-03, HU-04, HU-06, HU-07, HU-08, HU-09, HU-12, HU-13, HU-14, HU-15, HU-16, HU-17, HU-18, HU-19, HU-20, HU-21, HU-22, HU-23 |
-| R2 | HU-10, HU-11 |
+| R2 | HU-10, HU-11, HU-24 |
 | R1 y R2 (cada historia indica qué RF va en cada release) | HU-01, HU-05 |
 
 **Dentro del alcance del MVP completo** (R1 más R2) está lo descrito arriba; la lista anterior de funciones del MVP se reparte entre los dos releases.
@@ -760,6 +760,42 @@ Escenario: El cliente no envía el mensaje
 Nota: el mensaje partido se envía parte por parte; cada parte lleva el número de pedido y "parte N/M" para que el local pueda reconstruirlo aunque lleguen desordenadas o falte alguna.
 ```
 
+### HU-24 Ubicación del local por GPS
+Como dueño del comercio quiero guardar la ubicación de mi local con el GPS del celular para que mis clientes sepan cómo llegar.
+
+Requerimientos: RF-036
+
+Release: R2
+
+```gherkin
+Escenario: Guardar la ubicación actual
+  Dado que estoy en la configuración del local desde la app Android
+  Y otorgué el permiso de ubicación
+  Cuando toco "Usar mi ubicación actual" y guardo
+  Entonces el local queda con su latitud, longitud y precisión
+
+Escenario: Permiso denegado
+  Dado que rechacé el permiso de ubicación
+  Cuando toco "Usar mi ubicación actual"
+  Entonces la app informa que necesita el permiso
+  Y puedo guardar el local sin ubicación
+
+Escenario: Precisión insuficiente
+  Dado que el GPS informa una precisión peor que 100 m
+  Cuando intento guardar la ubicación
+  Entonces la app me pide reintentar o confirmar igual
+
+Escenario: Cómo llegar desde el autopedido
+  Dado un local con ubicación guardada
+  Cuando un cliente abre el autopedido
+  Entonces ve un enlace "Cómo llegar" que abre el mapa en esa ubicación
+
+Escenario: Local sin ubicación
+  Dado un local sin ubicación guardada
+  Cuando un cliente abre el autopedido
+  Entonces no se muestra el enlace "Cómo llegar"
+```
+
 ## 9. Trazabilidad
 
-Todos los RF (RF-001 a RF-035) están cubiertos por al menos una historia (HU-01 a HU-23). Cada historia lleva su release (R1 o R2) y coincide con la columna Release de `docs/requerimientos.xlsx`. Los casos de prueba se vincularán en la matriz de trazabilidad de `docs/testing.md`.
+Todos los RF (RF-001 a RF-036) están cubiertos por al menos una historia (HU-01 a HU-24). Cada historia lleva su release (R1 o R2) y coincide con la columna Release de `docs/requerimientos.xlsx`. Los casos de prueba se vincularán en la matriz de trazabilidad de `docs/testing.md`.

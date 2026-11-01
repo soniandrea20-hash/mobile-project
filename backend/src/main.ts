@@ -3,11 +3,12 @@ import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { serveMedia } from './media/serve-media';
+import { mediaBaseUrl } from './media/blob-container';
 import { uploadsDir } from './media/uploads-dir';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
-  serveMedia(app, uploadsDir());
+  serveMedia(app, uploadsDir(), mediaBaseUrl());
 
   app.useGlobalPipes(
     new ValidationPipe({

@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { blobContainer, blobEnabled } from 'src/media/blob-container';
 import { TenantsModule } from 'src/tenants/tenants.module';
 import { ProductsController } from './api/products.controller';
 import { PublicCatalogController } from './api/public-catalog.controller';
@@ -13,6 +14,7 @@ import { IMAGE_STORAGE } from './application/ports/image-storage';
 import { RemoveProductImageUseCase } from './application/remove-product-image.use-case';
 import { SetProductImageUseCase } from './application/set-product-image.use-case';
 import { PRODUCT_REPOSITORY } from './domain/product.repository';
+import { BlobImageStorage } from './infraestructure/blob-image-storage';
 import { LocalImageStorage } from './infraestructure/local-image-storage';
 import { PostgreProductRepository } from './infraestructure/postgre-product.repository';
 import { ProductOrmEntity } from './infraestructure/product.orm-entity';
@@ -22,7 +24,10 @@ import { ProductOrmEntity } from './infraestructure/product.orm-entity';
   controllers: [ProductsController, PublicCatalogController],
   providers: [
     { provide: PRODUCT_REPOSITORY, useClass: PostgreProductRepository },
-    { provide: IMAGE_STORAGE, useClass: LocalImageStorage },
+    {
+      provide: IMAGE_STORAGE,
+      useFactory: () => (blobEnabled() ? new BlobImageStorage(blobContainer()) : new LocalImageStorage()),
+    },
     ListProductsUseCase,
     GetProductUseCase,
     GetPublicCatalogUseCase,

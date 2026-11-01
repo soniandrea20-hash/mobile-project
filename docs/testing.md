@@ -734,14 +734,14 @@ Pending: supertest con base para el aislamiento por tenant, el orden por `create
 Automated (`backend/test/content/content.use-cases.spec.ts`; la duración de video va detrás del puerto `IVideoProbe`, sin ffprobe en los tests):
 - Tipo por contenido real: JPG y MP4 reconocidos por magic bytes; un `.exe` renombrado da 415 `UNSUPPORTED_MEDIA_TYPE` sin guardar archivo (TC-053).
 - Alta de imagen: 5 242 880 bytes aceptado y 5 242 881 da 413 `MEDIA_TOO_LARGE`; duración por defecto 10 o `DEFAULT_IMAGE_SECONDS`; usa la duración enviada; se agrega con el archivo guardado y la `url` bajo `/media` (TC-052).
-- Alta de video: duración medida por el puerto; 60 s aceptado y 61 s da 422 `VIDEO_TOO_LONG` borrando el archivo (TC-055, TC-056); 52 428 800 bytes aceptado y 52 428 801 da 413 (TC-054, TC-055); lectura fallida da 422 `MEDIA_UNREADABLE` borrando el archivo; `duration_seconds` con un video da 422 sin guardar.
+- Alta de video: la duración se mide con el `Buffer` antes de guardar (un video inválido nunca se sube); 60 s aceptado y 61 s da 422 `VIDEO_TOO_LONG` sin llamar a `storage.save` (TC-055, TC-056); 52 428 800 bytes aceptado y 52 428 801 da 413 (TC-054, TC-055); lectura fallida da 422 `MEDIA_UNREADABLE` sin guardar; si falla el insert del video se borra el archivo guardado; `duration_seconds` con un video da 422 sin guardar.
 - Alta: `STORE_NOT_FOUND`; el archivo se borra si falla el insert.
 - Listado: `STORE_NOT_FOUND`; consulta con `tenant_id` y `store_id`; incluye ocultos, sin `file_path`.
 - Edición: 400 `EMPTY_UPDATE`; 404 `CONTENT_NOT_FOUND` (otro tenant); 422 con duración en un video; ocultar un video; duración de una imagen.
 - Orden: `STORE_NOT_FOUND`; 422 si falta, sobra o es ajeno un contenido (sin tocar el repositorio); reasigna incluyendo ocultos y devuelve el nuevo orden (TC-058).
 - Borrado: 404 si no existe en el tenant; borra la fila y después el archivo.
 
-Manual (contra la base, `ffprobe` en el PATH): subir un MP4 real de 2,3 s y comprobar `duration_seconds: 3`; subir un archivo corrupto con extensión `.mp4` y comprobar 422 `MEDIA_UNREADABLE`; borrar un contenido intermedio y comprobar que los restantes quedan con `sort_order` consecutivo y que el archivo desapareció de `UPLOADS_DIR`; con el token de `local2`, `GET /content?store_id=` de un local de `local1` da 404 y `PATCH`/`DELETE` de un contenido de `local1` dan 404 (RNF-012).
+Manual (contra la base, `ffprobe` en el PATH; la sonda escribe el video en un archivo temporal de `os.tmpdir()` y lo borra siempre; comprobar que no quedan `probe-*.mp4`): subir un MP4 real de 2,3 s y comprobar `duration_seconds: 3`; subir un archivo corrupto con extensión `.mp4` y comprobar 422 `MEDIA_UNREADABLE`; borrar un contenido intermedio y comprobar que los restantes quedan con `sort_order` consecutivo y que el archivo desapareció de `UPLOADS_DIR`; con el token de `local2`, `GET /content?store_id=` de un local de `local1` da 404 y `PATCH`/`DELETE` de un contenido de `local1` dan 404 (RNF-012).
 
 Pending: supertest con base para el aislamiento por tenant, el `INSERT ... max + 1`, la transacción de orden y de borrado, los 400 de validación (`store_id` o `contentId` no UUID, falta `file`, `duration_seconds` fuera de 3 a 60, `content_ids` vacío o repetido), el 403 sin permiso y el 413 real del video de 50 MB; TC-148 y TC-150 (k6); TC-058 (Playwright, depende del reproductor).
 
@@ -781,7 +781,10 @@ Automated (`backend/test/products`):
 - `image-type.spec.ts`: magic bytes JPG, PNG y WebP; GIF, exe renombrado, RIFF no WebP y buffers cortos devuelven null; límite 5 242 880 (TC-035).
 - `product-image.use-cases.spec.ts`: 415 `UNSUPPORTED_MEDIA_TYPE`, 422 `MEDIA_UNREADABLE`, 404; orden escribir nuevo, actualizar base, borrar viejo; el archivo nuevo se borra si falla la base; quitar imagen; borrar producto borra el archivo.
 - `local-image-storage.spec.ts`: sharp real en un directorio temporal; PNG de 4000 px queda en 1280 px o menos (TC-036), una imagen de 200 px no se agranda, bytes corruptos dan 422 sin dejar archivos.
-- `media-http.spec.ts`: supertest con app Nest mínima; 5 242 880 bytes aceptado y 5 242 881 da 413 con `code: MEDIA_TOO_LARGE` (TC-033, TC-034); `GET /media/*` responde con `Cache-Control: public, max-age=31536000, immutable` aunque un middleware rechace toda ruta (sin tenant), 404 si no existe, sin listado de directorios ni path traversal.
+- `media-http.spec.ts`: supertest con app Nest mínima; 5 242 880 bytes aceptado y 5 242 881 da 413 con `code: MEDIA_TOO_LARGE` (TC-033, TC-034); `GET /media/*` responde con `Cache-Control: public, max-age=31536000, immutable` aunque un middleware rechace toda ruta (sin tenant), 404 si no existe, sin listado de directorios ni path traversal. Con Blob activo (`serveMedia` con URL base) responde 302 con `Location` = URL del contenedor + ruta sin pasar por el middleware de tenant, y 404 ante traversal (`..`, `%2e%2e`, `%2f`, `%5c`), ruta vacía o `%` inválido.
+- `test/media/blob-storage.spec.ts` (Azure Blob Storage, `ContainerClient` simulado): `BlobImageStorage` sube la imagen reducida a 1280 px con nombre `<tenant>/products/<uuid>.<ext>`, `Content-Type` y `Cache-Control: public, max-age=31536000, immutable`, y con bytes corruptos da 422 sin subir; `BlobContentStorage` sube los bytes intactos a `<tenant>/content/<uuid>.<ext>` con `Content-Type` según la extensión; en ambos `remove` usa `deleteIfExists` y no lanza si Azure falla.
+
+Manual (almacenamiento en Azure Blob; contra Azurite o una cuenta real con `AZURE_STORAGE_CONNECTION_STRING` y el contenedor `AZURE_STORAGE_CONTAINER` ya creado): subir una imagen de producto y un video de pantalla y comprobar que los blobs aparecen como `<tenant>/products/<uuid>.<ext>` y `<tenant>/content/<uuid>.mp4` con `Content-Type` y `Cache-Control` correctos; `GET /media/<ruta>` sin `Host` de tenant da 302 al blob y el navegador lo descarga; `GET /media/..%2f..%2fx` da 404; con `MEDIA_PUBLIC_BASE_URL` definida, el `Location` usa esa base; quitar la imagen o borrar el contenido elimina el blob; subir un MP4 corrupto da 422 `MEDIA_UNREADABLE` y no deja ningún blob; sin `AZURE_STORAGE_CONNECTION_STRING` los archivos siguen en `UPLOADS_DIR` y `/media` los sirve con 200.
 
 Pending: supertest del endpoint real `PUT/DELETE /products/:id/image` con base (403 sin permiso, 404 de otro tenant, 400 sin `file`); TC-037 manual en Android físico; TC-142 (k6).
 
@@ -975,3 +978,12 @@ Manual (backend corriendo, base con `db:apply` sin la semilla de desarrollo, `BA
 - No funcional: `PermissionsGuard` y `MembershipGuard` agregan una consulta indexada (`users_roles` por clave primaria) por solicitud protegida; medir en la corrida k6 de R2 (TC-112).
 
 Pending: supertest con base para la concurrencia del primer registro y el alta transaccional (TC-001, TC-003, TC-129).
+
+### Despliegue en Azure (`docs/deploy.md`)
+
+Manual / no funcional:
+- Imagen: `docker build -t mobile-backend backend` termina sin error y `docker run --rm --entrypoint ffprobe mobile-backend -version` imprime la versión (sin `ffprobe` la subida de videos falla). La imagen corre como usuario `node` y `require('sharp')` y `require('./dist/app.module')` dentro de ella no fallan.
+- Arranque: con las variables de `docs/deploy.md` (base accesible con `PGSSLMODE=require` y `AZURE_STORAGE_CONNECTION_STRING`), el contenedor escucha en el puerto 3000 y `GET /media/<tenant>/products/<archivo>` responde 302 hacia la URL pública del blob; una ruta con `..%2f` responde 404.
+- Pipeline: un PR que toca `backend/` ejecuta solo el job `test` (`tsc` y Jest) y no despliega; un push a `main` ejecuta `test` y luego `deploy` (environment `production`), y la revisión activa de la Container App usa la imagen con el SHA del commit.
+- Pipeline negativo: con un test roto en el PR el job `test` falla y `deploy` no corre.
+- Seguridad: el workflow no contiene secretos (solo `secrets.AZURE_*` y `vars.*`); sin la credencial federada OIDC del environment `production` el login de Azure falla.
