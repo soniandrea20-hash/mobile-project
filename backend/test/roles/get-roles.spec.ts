@@ -17,7 +17,7 @@ describe('GetRolesUseCase', () => {
       {
         role_id: 'role-1',
         name: 'PLATFORM_ADMIN',
-        description: 'Administrador de la plataforma EduKit',
+        description: 'Administrador de la plataforma Mostrador',
       },
       {
         role_id: 'role-2',

@@ -1,0 +1,93 @@
+import { ApiError } from './api';
+import {
+  categoryErrorMessage,
+  checkImage,
+  parsePrice,
+  priceToInput,
+  productErrorMessage,
+  uploadErrorMessage,
+  validateProduct,
+} from './product-rules';
+
+describe('parsePrice', () => {
+  it.each([
+    ['8500', '8500.00'],
+    ['8.500', '8500.00'],
+    ['8500,50', '8500.50'],
+    ['8.500,5', '8500.50'],
+    [' 1.234.567,89 ', '1234567.89'],
+    ['15.5', '15.50'],
+    ['0,5', '0.50'],
+  ])('accepts %s', (input, expected) => expect(parsePrice(input)).toBe(expected));
+
+  it.each(['', '  ', '-5', '0', '0,00', 'abc', '8,500,5', '8,505', '1..5', '10000000', '$8500'])(
+    'rejects %j',
+    (input) => expect(parsePrice(input)).toBeNull(),
+  );
+});
+
+describe('priceToInput', () => {
+  it('turns the API string into the field text', () => {
+    expect(priceToInput('1500.00')).toBe('1500,00');
+  });
+});
+
+describe('validateProduct', () => {
+  const ok = { name: ' Agua ', description: '', price: '1500', categoryId: 'c1' };
+
+  it('accepts a valid product', () => expect(validateProduct(ok)).toEqual({}));
+
+  it('requires name, category and a positive price', () => {
+    const errors = validateProduct({ name: ' ', description: '', price: '0', categoryId: '' });
+    expect(errors.name).toBe('Ingresá el nombre.');
+    expect(errors.categoryId).toBe('Elegí una categoría.');
+    expect(errors.price).toBe('El precio debe ser mayor que 0.');
+  });
+
+  it('limits name to 80 and description to 500 characters', () => {
+    expect(validateProduct({ ...ok, name: 'a'.repeat(81) }).name).toBe('El nombre admite hasta 80 caracteres.');
+    expect(validateProduct({ ...ok, name: 'a'.repeat(80) }).name).toBeUndefined();
+    expect(validateProduct({ ...ok, description: 'a'.repeat(501) }).description).toBe(
+      'La descripción admite hasta 500 caracteres.',
+    );
+  });
+});
+
+describe('checkImage', () => {
+  const MB = 1024 * 1024;
+  it('accepts JPG and PNG up to exactly 5 MB', () => {
+    expect(checkImage({ mimeType: 'image/jpeg', fileSize: 5 * MB })).toBeNull();
+    expect(checkImage({ mimeType: 'image/png', fileSize: 1 })).toBeNull();
+  });
+  it('rejects bigger files and other types', () => {
+    expect(checkImage({ mimeType: 'image/png', fileSize: 5 * MB + 1 })).toBe('La imagen supera el límite de 5 MB.');
+    expect(checkImage({ mimeType: 'image/webp', fileSize: 1 })).toBe('Elegí una imagen JPG o PNG.');
+    expect(checkImage({ mimeType: null, fileSize: 1 })).toBe('Elegí una imagen JPG o PNG.');
+  });
+  it('lets an unknown size through for the server to judge', () => {
+    expect(checkImage({ mimeType: 'image/png', fileSize: undefined })).toBeNull();
+  });
+});
+
+describe('server error messages', () => {
+  it('maps upload codes', () => {
+    expect(uploadErrorMessage(new ApiError(413, 'MEDIA_TOO_LARGE', 'x'))).toBe('La imagen supera el límite de 5 MB.');
+    expect(uploadErrorMessage(new ApiError(415, 'UNSUPPORTED_MEDIA_TYPE', 'x'))).toBe('Elegí una imagen JPG o PNG.');
+    expect(uploadErrorMessage(new ApiError(422, 'MEDIA_UNREADABLE', 'x'))).toBe('No se pudo leer la imagen. Probá con otra.');
+    expect(uploadErrorMessage(new ApiError(0, null, 'x'))).toBe('No se pudo conectar con el servidor.');
+    expect(uploadErrorMessage(new Error('x'))).toBe('No se pudo subir la imagen.');
+  });
+  it('maps product codes', () => {
+    expect(productErrorMessage(new ApiError(422, 'PRODUCT_LIMIT_REACHED', 'x'))).toBe(
+      'El local llegó al límite de 200 productos.',
+    );
+    expect(productErrorMessage(new ApiError(404, 'PRODUCT_NOT_FOUND', 'x'))).toBe('El producto ya no existe.');
+    expect(productErrorMessage(new ApiError(403, null, 'x'))).toBe('No tenés permiso para esta acción.');
+    expect(productErrorMessage(new ApiError(0, null, 'x'))).toBe('No se pudo conectar con el servidor.');
+    expect(productErrorMessage(new Error('x'))).toBe('No se pudo guardar el producto.');
+  });
+  it('maps category codes', () => {
+    expect(categoryErrorMessage(new ApiError(409, 'CATEGORY_NAME_TAKEN', 'x'))).toBe('Ya existe una categoría con ese nombre.');
+    expect(categoryErrorMessage(new Error('x'))).toBe('No se pudo crear la categoría.');
+  });
+});

@@ -17,7 +17,7 @@ describe('GetRoleByIdUseCase', () => {
     const role = {
       role_id: 'role-1',
       name: 'PLATFORM_ADMIN',
-      description: 'Administrador de la plataforma EduKit',
+      description: 'Administrador de la plataforma Mostrador',
     };
     roleRepository.getById.mockResolvedValue(role);
 
@@ -38,7 +38,7 @@ describe('GetRoleByIdUseCase', () => {
     roleRepository.getById.mockResolvedValue({
       role_id: 'role-1',
       name: 'PLATFORM_ADMIN',
-      description: 'Administrador de la plataforma EduKit',
+      description: 'Administrador de la plataforma Mostrador',
     });
 
     await useCase.execute('role-1');

@@ -1,237 +1,112 @@
-
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
+import { Platform } from 'react-native';
 
 import {
-
-  createContext,
-
-  useContext,
-
-  useMemo,
-
-  useState,
-
-  type ReactNode,
-
-} from 'react';
-
-
-
-import type { Product } from '@/lib/products';
-
-
-
-export type CartItem = {
-
-  product: Product;
-
-  quantity: number;
-
-};
-
-
+  addLine,
+  parseCart,
+  removeLine,
+  changeQuantity,
+  totalCents,
+  type CartLine,
+} from '@/lib/cart-rules';
+import type { PublicProduct } from '@/lib/api';
+import { resolveTenantSlug } from '@/lib/tenant';
 
 type CartContextValue = {
-
-  items: CartItem[];
-
-  addItem: (product: Product) => void;
-
-  updateQuantity: (productId: string, quantity: number) => void;
-
-  removeItem: (productId: string) => void;
-
-  clearCart: () => void;
-
-  total: number;
-
+  lines: CartLine[];
+  totalCents: number;
   itemCount: number;
-
+  /** Real store name once the layout loaded it; null until then. */
+  storeName: string | null;
+  setStoreName: (name: string | null) => void;
+  /** Scopes the cart to a store and restores its saved lines. Call from the store route. */
+  bindStore: (storeSlug: string) => void;
+  /** Returns false when the 50-product cap rejected the product. */
+  addProduct: (product: PublicProduct) => boolean;
+  setQuantity: (productId: string, quantity: number) => void;
+  removeItem: (productId: string) => void;
+  clearCart: () => void;
 };
-
-
 
 const CartContext = createContext<CartContextValue | undefined>(undefined);
 
+const storageKey = (storeSlug: string) => `cart:${resolveTenantSlug() ?? '-'}:${storeSlug}`;
 
+// ponytail: native carts live in memory and are lost on app restart; use AsyncStorage if native persistence is needed
+const storage = {
+  load(storeSlug: string): CartLine[] {
+    if (Platform.OS !== 'web') return [];
+    try {
+      return parseCart(window.localStorage.getItem(storageKey(storeSlug)));
+    } catch {
+      return [];
+    }
+  },
+  save(storeSlug: string, lines: CartLine[]) {
+    if (Platform.OS !== 'web') return;
+    try {
+      window.localStorage.setItem(storageKey(storeSlug), JSON.stringify(lines));
+    } catch {}
+  },
+};
 
 export function CartProvider({ children }: { children: ReactNode }) {
-
-  const [items, setItems] = useState<CartItem[]>([]);
-
-
-
-  const addItem = (product: Product) => {
-
-    if (!product.active || product.stock < 1) return;
-
-
-
-    setItems((current) => {
-
-      const existing = current.find(
-
-        (item) => item.product.id === product.id,
-
-      );
-
-
-
-      if (existing) {
-
-        if (existing.quantity >= Math.min(product.stock, 50)) {
-
-          return current;
-
-        }
-
-
-
-        return current.map((item) =>
-
-          item.product.id === product.id
-
-            ? {
-
-                ...item,
-
-                quantity: item.quantity + 1,
-
-                product,
-
-              }
-
-            : item,
-
-        );
-
-      }
-
-
-
-      return [...current, { product, quantity: 1 }];
-
-    });
-
-  };
-
-
-
-
-
-  const updateQuantity = (productId: string, quantity: number) => {
-
-    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 50) {
-
-      return;
-
-    }
-
-
-
-    setItems((current) =>
-
-      current.map((item) =>
-
-        item.product.id === productId &&
-
-        quantity <= item.product.stock
-
-          ? { ...item, quantity }
-
-          : item,
-
-      ),
-
-    );
-
-  };
-
-
-
-  const removeItem = (productId: string) => {
-
-    setItems((current) =>
-
-      current.filter((item) => item.product.id !== productId),
-
-    );
-
-  };
-
-
-
-  const clearCart = () => setItems([]);
-
-
-
-  const total = items.reduce(
-
-    (sum, item) => sum + item.product.price * item.quantity,
-
-    0,
-
+  const [storeSlug, setStoreSlug] = useState<string | null>(null);
+  const [lines, setLines] = useState<CartLine[]>([]);
+  const [storeName, setStoreName] = useState<string | null>(null);
+  const boundSlug = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (storeSlug) storage.save(storeSlug, lines);
+  }, [storeSlug, lines]);
+
+  const bindStore = useCallback((slug: string) => {
+    if (slug === boundSlug.current) return;
+    boundSlug.current = slug;
+    setStoreSlug(slug);
+    setStoreName(null);
+    setLines(storage.load(slug));
+  }, []);
+
+  const addProduct = useCallback(
+    (product: PublicProduct) => {
+      const result = addLine(lines, product);
+      setLines(result.lines);
+      return !result.rejected;
+    },
+    [lines],
   );
 
-
-
-  const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
-
-
-
-  const value = useMemo(
-
+  const value = useMemo<CartContextValue>(
     () => ({
-
-      items,
-
-      addItem,
-
-      updateQuantity,
-
-      removeItem,
-
-      clearCart,
-
-      total,
-
-      itemCount,
-
+      lines,
+      totalCents: totalCents(lines),
+      itemCount: lines.reduce((sum, l) => sum + l.quantity, 0),
+      storeName,
+      setStoreName,
+      bindStore,
+      addProduct,
+      setQuantity: (id, q) => setLines((cur) => changeQuantity(cur, id, q)),
+      removeItem: (id) => setLines((cur) => removeLine(cur, id)),
+      clearCart: () => setLines([]),
     }),
-
-    [items, total, itemCount],
-
+    [lines, storeName, bindStore, addProduct],
   );
 
-
-
-  return (
-
-    <CartContext.Provider value={value}>
-
-      {children}
-
-    </CartContext.Provider>
-
-  );
-
+  return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }
 
-
-
 export function useCart() {
-
   const context = useContext(CartContext);
-
-
-
-  if (!context) {
-
-    throw new Error('useCart debe utilizarse dentro de CartProvider');
-
-  }
-
-
-
+  if (!context) throw new Error('useCart debe utilizarse dentro de CartProvider');
   return context;
-
 }

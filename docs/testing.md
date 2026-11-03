@@ -247,7 +247,7 @@ Los casos de estrés usan, salvo que se indique "meta propuesta", las metas de `
 | TC-078 | HU-17 | RF-026 | Producto sin imagen | Producto sin imagen | producto sin foto | 1. Verlo en el catálogo | Se muestra la imagen por defecto | Límite | Baja | Sí (Playwright) |
 | TC-079 | HU-18 | RF-027 | Agregar productos y total | Catálogo abierto | 2 × Agua 500 ml a 1500,00 | 1. Agregar 2 unidades | Carrito con total 3000,00 | Funcional feliz | Alta | Sí (Playwright, Jest) |
 | TC-080 | HU-18 | RF-027 | Quitar producto | Carrito con 2 productos | quitar uno | 1. Quitar el producto | Desaparece y el total se recalcula | Funcional feliz | Alta | Sí (Playwright) |
-| TC-081 | HU-18 | RF-027 | Cantidades mínima y máxima | Carrito con un producto | cantidades 1, 50 y 51 | 1. Ajustar a 50 y agregar una más<br>2. Intentar bajar de 1 | No supera 50; el mínimo es 1 (para quitar se usa la acción quitar) | Límite | Alta | Sí (Playwright) |
+| TC-081 | HU-18 | RF-027 | Cantidades mínima y máxima | Carrito con un producto | cantidades 1, 50 y 51 | 1. Ajustar a 50 y agregar una más<br>2. Tocar "-" con cantidad 1 | No supera 50; "-" con cantidad 1 quita el producto | Límite | Alta | Sí (Playwright) |
 | TC-082 | HU-18 | RF-027 | Total sin errores de redondeo | Carrito | 3 × 1800,00 + 7 × 1500,00 | 1. Armar el carrito | Total 15900,00 exacto | Límite | Media | Sí (Jest) |
 | TC-083 | HU-18 | RF-027 | El carrito sobrevive a la recarga | Carrito con productos | recarga de página | 1. Recargar | El carrito se conserva | Funcional feliz | Media | Sí (Playwright) |
 | TC-084 | HU-19 | RF-028, RF-029 | Confirmación exitosa | Carrito con productos; local con WhatsApp | nombre "Ana" | 1. Escribir el nombre<br>2. Confirmar | Orden "generada" guardada y se abre WhatsApp con el mensaje armado | Funcional feliz | Alta | Sí (Playwright) |
@@ -987,3 +987,140 @@ Manual / no funcional:
 - Pipeline: un PR que toca `backend/` ejecuta solo el job `test` (`tsc` y Jest) y no despliega; un push a `main` ejecuta `test` y luego `deploy` (environment `production`), y la revisión activa de la Container App usa la imagen con el SHA del commit.
 - Pipeline negativo: con un test roto en el PR el job `test` falla y `deploy` no corre.
 - Seguridad: el workflow no contiene secretos (solo `secrets.AZURE_*` y `vars.*`); sin la credencial federada OIDC del environment `production` el login de Azure falla.
+
+### Tema y componentes compartidos del autopedido (`mobile/src/components/ui/mostrador`)
+
+Automatizado: `cd mobile && npm test` (jest-expo) ejecuta `clamp.test.ts`, que cubre el límite del contador de cantidad (Stepper): un valor dentro del rango se conserva y uno fuera del rango queda en el mínimo o el máximo.
+
+Manual / no funcional:
+- Fuentes en web: `npx expo start --web` carga la app sin texto en la fuente del sistema; en DevTools los títulos usan Plus Jakarta Sans y los textos, precios y formularios usan DM Sans.
+- Fuentes en Android: en emulador o celular con Expo Go o development build, el splash se mantiene hasta que las fuentes cargan y luego no hay un parpadeo de fuente del sistema.
+- Paleta: botones primario (naranja `#EA580C`), secundario (blanco con borde y texto oscuro) y WhatsApp (`#25D366`), campo de texto, chips, contador y tarjeta de producto usan los colores y radios del Figma (fondo `#FAF7F2`, borde `#E7E5E4`, texto `#1C1917`), sin restos del verde anterior.
+- Accesibilidad: cada botón, chip y control del contador tiene rol y etiqueta, y un área táctil de al menos 44 px; el botón "+" de la tarjeta de producto y los botones del contador se activan con un toque en los 44 px; el campo de texto con foco de teclado se distingue visualmente; los errores de un campo se anuncian como alerta.
+
+### Catálogo del autopedido (SO-01, HU-16, HU-17, RF-025, RF-026)
+
+Automatizado: `cd mobile && npm test` ejecuta `catalog-rules.test.ts`: las categorías sin productos no se muestran, el filtro devuelve los productos de la categoría activa y un id desconocido o vacío cae en la primera categoría visible.
+
+Manual / no funcional:
+- Ruta: `local1.localhost:8081/palermo` abre el catálogo de palermo; `/` redirige a `/palermo` (o al `EXPO_PUBLIC_STORE_SLUG`).
+- Categorías: hay un chip por categoría con productos y el primero está activo; al tocar otro se ven solo sus productos con foto y precio; una categoría sin productos disponibles no aparece.
+- Sin imagen: un producto con `image_url` nulo muestra la imagen por defecto (ícono de imagen naranja sobre fondo naranja suave) y no una tarjeta rota.
+- Agregar: el botón "+" suma el producto, el botón inferior dice "Ver carrito · N productos · $X" ("1 producto" en singular) y se actualiza; con el carrito vacío dice "Ver carrito" y está deshabilitado.
+- Límite: al agregar un producto distinto número 51 aparece el mensaje en línea "El pedido admite hasta 50 productos distintos." (sin `Alert`, visible en web).
+- Estados: cargando muestra "Cargando catálogo..."; con la API apagada, "No pudimos cargar el catálogo" y "Reintentar" recarga; `belgrano` (sin productos) muestra "Todavía no hay productos disponibles"; `/inexistente` muestra "No encontramos este local" sin botón de reintento.
+- Layout web: a 360 px de ancho no hay scroll horizontal de la página (solo la fila de chips se desplaza); en escritorio el contenido queda centrado con un ancho máximo de 480 px.
+- Detalle de producto: no existe pantalla de detalle; ningún requerimiento (HU-16 a HU-20) lo pide.
+- Pendiente: la pantalla no se contrastó contra el Figma SO-01 (límite de llamadas de la API de Figma).
+
+### Carrito, confirmación y pedido registrado (SO-02, SO-03, SO-04, HU-18, HU-19, RF-027 a RF-029, RF-034)
+
+Automatizado: `cd mobile && npm test` ejecuta `order-rules.test.ts`: los campos se recortan y los vacíos se omiten; el nombre acepta 50 caracteres y rechaza 51; la nota acepta 200 y rechaza 201; el texto y los botones de WhatsApp para 0, 1 y N partes.
+
+Manual / no funcional:
+- Carrito: en `/palermo/cart` cada producto muestra nombre, total de la línea y contador (1 a 50, "+" deshabilitado en 50); cambiar la cantidad recalcula Subtotal y Total; "-" con cantidad 1 quita el producto (etiqueta "Quitar <nombre>", HU-18) y no hay botón "Quitar" aparte; "Seguir pidiendo" vuelve al catálogo.
+- Carrito vacío: muestra "Tu pedido está vacío" con "Volver al catálogo" y no hay botón "Continuar"; abrir `/palermo/confirm` con el carrito vacío redirige al carrito.
+- Confirmar: "Tu nombre" y "Nota para el local (opcional)" sin contadores de caracteres; nota de 200 caracteres se envía; con 201 aparece en línea "La nota admite hasta 200 caracteres." y no se envía; con nombre de 51, el mensaje del máximo de 50.
+- Envío: campos vacíos no viajan en el cuerpo de la petición (DevTools, Network); no se envía `source_screen_id`.
+- Doble envío: dos toques rápidos en "Confirmar pedido" (o Enter repetido) crean una sola orden; el botón queda en estado de carga hasta la respuesta.
+- Éxito: el carrito se vacía solo tras la respuesta, se llega a "¡Listo!" con `#número` y `Total` del servidor; "Atrás" del navegador no vuelve a Confirmar.
+- Local sin número: muestra "Tu pedido fue registrado, el comercio lo verá en su panel" y ningún botón de WhatsApp.
+- Una parte: "Enviá el pedido al WhatsApp del local." y un botón "Enviar por WhatsApp".
+- Varias partes: pedido con muchos productos muestra "Es largo, así que va en N partes: tocá cada botón en orden." y botones "Enviar parte i/N"; cada botón abre `wa.me` en una pestaña sin que el navegador bloquee la ventana; el botón tocado queda marcado "enviado" y sigue activo.
+- Error al abrir WhatsApp: si `Linking.openURL` falla aparece "No pudimos abrir WhatsApp. Intentá nuevamente." en línea.
+- Recarga en "¡Listo!": F5 mantiene número, total y botones (sessionStorage por tenant y local); en una pestaña nueva sin pedido, redirige al catálogo. En Android el pedido solo vive en memoria (límite conocido).
+- 409 producto no disponible: desactivar un producto del carrito en el backoffice y confirmar; aparece en línea "Algunos productos ya no están disponibles: <nombres>. Revisá tu pedido." con el enlace "Volver al pedido", el carrito intacto y los campos conservados.
+- 404 / 400: el mensaje del servidor se muestra en línea; ninguna pantalla usa `Alert`.
+- Sin conexión: con la API apagada aparece "No pudimos enviar el pedido. Revisá la conexión e intentá nuevamente.", se conservan nombre, nota y carrito, y volver a tocar "Confirmar pedido" reintenta.
+- Contraste visual: SO-01 a SO-04 y los componentes se compararon a 390x844 contra las exportaciones PNG de `docs/mostrador_figma/` (no contra el Figma en vivo), con la API interceptada (datos simulados, sin backend); se verificó "-" con cantidad 1 quita la línea y "+" deshabilitado en 50.
+
+### Demo del autopedido (T5, 2026-11-01)
+
+- Automatizado: `formatCents` cubierto en `mobile/src/lib/format-price.test.ts` (sin RED posible: la función ya existía) y `submit-lock.test.ts` (RED observado). `npx tsc --noEmit` 0, `npm test` 37 pasados, `npx expo lint` 0.
+- Corrección: los encabezados de carrito y confirmación muestran el nombre real del local (el layout lo carga del catálogo); mientras carga o si falla, muestran el slug.
+- Ejecución en navegador (Chromium, 390x844 y 1280x800, 2026-11-01) **con la API interceptada** (`page.route` sobre `localhost:3000/public/stores/**`, cuerpos armados a mano desde `docs/api.md`, con CORS y preflight; `wa.me` apuntó a un stub). **No verifica** el backend real, la semilla, CORS real ni la base de datos: ninguno corrió en esta máquina (sin Postgres ni Docker).
+- Pasaron: catálogo con datos simulados, Plus Jakarta Sans y DM Sans cargadas y aplicadas, chips que filtran, imagen nula con "Sin foto", sin errores de consola salvo los de red provocados a propósito; la petición lleva `X-Tenant-Slug: local1`; carrito (stepper en 1 y 50, quitar, total, sobrevive a la recarga, `localStorage` corrupto o con forma inválida no rompe y deja el carrito vacío); confirmar con nombre y nota recortados, cuerpo sin precios, total de "¡Listo!" tomado de la respuesta (no del carrito) y carrito vaciado; recarga en "¡Listo!" conserva número, total y botones; "Atrás" no genera otro POST; 3 partes (`Enviar parte i/3`, abre la URL simulada y marca `· enviado`) y 1 parte (`Enviar por WhatsApp`); `whatsapp_parts: []` con el texto exacto y sin botones; 409 `PRODUCTS_UNAVAILABLE` nombra el producto, enlaza al carrito y lo deja intacto; petición abortada muestra el mensaje de conexión, conserva los campos y el reintento funciona; 404 `STORE_NOT_FOUND` en el catálogo; `/` redirige a `/palermo`; carrito vacío bloquea "Continuar" y `/confirm` redirige al carrito; nota de 200 se envía y la de 201 no genera POST; sin scroll horizontal a 390 px en las cuatro pantallas; a 1280 px el contenido queda centrado en 480 px; colores computados iguales a `tokens.ts`.
+- Falló y se corrigió: tres clics en el mismo tick sobre "Confirmar pedido" creaban 3 pedidos (el guard era estado de React); ahora `createSubmitLock` (un ref) deja pasar uno. El doble clic real ya creaba uno solo.
+- Observaciones sin corregir: la marca "enviado" de las partes se pierde al recargar "¡Listo!"; tras el 409, "Volver al pedido" apila el carrito sobre la confirmación y un nuevo "Continuar" apila otra confirmación (el historial crece, sin efecto funcional); `/` con la API apagada no se probó.
+- Sin ejecutar (requieren backend y base reales): semilla con WhatsApp ficticio y `local2/centro` sin número, CORS real desde `*.localhost`, TC-079, TC-080, TC-083, TC-084, TC-085, TC-086 contra la API, y el Figma SO-01 a SO-04.
+- Límite: `WHATSAPP_MAX_PART_CHARS` es una constante de `backend/src/orders/domain/whatsapp-message.ts`, no se lee del entorno; probar varias partes requiere un pedido de unos 30 productos distintos o hacerla configurable.
+
+### Backoffice: sesión, login y shell (BO-01, HU-04, RF-005, RF-009, T8)
+
+Automatizado: `cd mobile && npm test` ejecuta `session-token.test.ts` (vencimiento por `exp`; token vacío, sin `exp`, mal formado o no JSON cuenta como vencido), `api-auth.test.ts` (`authRequest` envía `Authorization` y `Content-Type` JSON, no fija `Content-Type` con `FormData`, llama una vez al manejador de 401 y no lo hace con 403; el 401 del login no lo dispara) y `login-rules.test.ts` (email obligatorio y con formato, contraseña de al menos 8; mensajes para 401, sin conexión y 403).
+
+Manual / no funcional (Chromium, 390x844, `local1.localhost:8081/admin`, **API interceptada con `page.route`**, no el backend real):
+- `/admin` sin sesión redirige a `/admin/login`; el login muestra el host real (`local1.localhost`; en nativo, el slug del tenant).
+- Validación: "Ingresar" vacío muestra "Ingresá tu email." y "La contraseña tiene al menos 8 caracteres." sin llamar a la API.
+- Credenciales malas: error en línea "Email o contraseña incorrectos."; API caída: "No se pudo conectar con el servidor."
+- Login válido: doble clic envía un solo `POST /auth/login`; luego `GET /me` con `Authorization: Bearer` y `X-Tenant-Slug: local1`; llega a `/admin/catalogo` con el local activo (primer local de `/me`) en la píldora.
+- Recarga conserva la sesión y la pestaña (`/admin/ordenes`); `/me` con 401, token vencido (sin llamar a `/me`) o token mal formado vuelven al login y borran el token.
+- Permisos: sin `screens:read` la pestaña "Pantallas" no aparece.
+- Rutas: `/admin/...` no lo captura `[storeSlug]`; `/palermo` sigue mostrando el catálogo.
+- Pendiente: un 401 a mitad de sesión en una llamada autenticada solo está cubierto por la prueba unitaria (las pestañas aún no llaman a la API); 403 `NOT_A_MEMBER` real y Android (`expo-secure-store`) sin probar; `web.output: single` exige que el hosting redirija toda ruta a `index.html`.
+
+### Backoffice: catálogo y edición de producto (BO-02, BO-03, HU-06, HU-07, HU-08, RF-010 a RF-013, T9)
+
+Automatizado: `cd mobile && npm test` ejecuta `product-rules.test.ts` (precio `8500`, `8.500`, `8500,50`, `8.500,5` a la cadena de la API; rechaza vacío, negativo, 0, malformado, más de 2 decimales y más de `9999999.99`; validación de nombre 1 a 80, descripción hasta 500, categoría y precio mayor que 0; imagen JPG o PNG hasta exactamente 5 MB, el tamaño desconocido pasa; mensajes para 413, 415, 422 `MEDIA_UNREADABLE`, `PRODUCT_LIMIT_REACHED`, `PRODUCT_NOT_FOUND`, 403, sin conexión y `CATEGORY_NAME_TAKEN`).
+
+Manual / no funcional (Chromium, 390x844, `local1.localhost:8081/admin`, **API interceptada con `page.route`** desde `docs/api.md`, no el backend real):
+- Lista: filtra por categoría con los chips ("Todas" primero), cada fila con miniatura, "Disponible" o "No disponible" y precio; estados de carga, error con "Reintentar" y vacío.
+- Rol: sin `products:create` no hay "+ Nuevo producto", sin `products:update` las filas no abren el editor, sin `categories:create` no hay "+ Categoría".
+- Editar: `/admin/catalogo/:id` mantiene activa la pestaña Catálogo; cambiar precio a `9.000,50` y disponibilidad envía un único `PATCH` con `price: "9000.50"` y `is_available`; al guardar vuelve a la lista y la refresca.
+- Crear: validación en línea con el formulario vacío; doble clic en "Crear producto" envía un solo `POST /products`; con imagen, luego `PUT /products/:id/image` multipart con el campo `file`.
+- Imagen: un archivo de más de 5 MB o de otro tipo muestra el mensaje en línea y no se sube; si el `PUT` falla (422) el producto queda guardado, se avisa que la imagen falló y "Guardar" reintenta con `PATCH` + `PUT`, sin crear otro producto.
+- Categorías: "+ Categoría" abre el campo; un nombre repetido muestra "Ya existe una categoría con ese nombre."; uno nuevo aparece como chip y queda seleccionado.
+- Un 401 a mitad de sesión (al abrir el editor) vuelve a `/admin/login`.
+- Pendiente: backend real, Android (`expo-image-picker` nativo, `FormData` con `{uri, name, type}`), `PRODUCT_LIMIT_REACHED` y el 413 del servidor solo por pruebas unitarias; en web el selector lanza un error de desarrollo (`removeChild`) cuando Playwright resuelve el diálogo de archivos, propio de la librería.
+
+### Backoffice: órdenes y ajustes (BO-06, BO-07, HU-21, HU-22, RF-031, RF-032, RF-033, T10)
+
+Automatizado: `cd mobile && npm test` ejecuta `admin-order-rules.test.ts` (rango de "Hoy" como día calendario local convertido a `from` inclusive y `to` exclusivo, también a las 23:30 y en fin de mes; acciones por estado y ninguna en estados finales; resumen "Juan · 3 ítems · QR", singular y sin nombre; mensajes para 409 `INVALID_STATUS_TRANSITION`, 403 y sin conexión) y `store-rules.test.ts` (`+54 9 11 5555-0142` a `+5491155550142`; vacío a `null`; rechaza sin `+`, letras, corto y cero inicial; formato legible; mensajes de error).
+
+Manual / no funcional (Chromium, 390x844, `local1.localhost:8081/admin`, **API interceptada con `page.route`** desde `docs/api.md`, no el backend real):
+- Órdenes: "Hoy" activo por defecto envía `from` y `to` del día local (con UTC-3, `03:00Z` a `03:00Z` del día siguiente); "Generadas" envía `status=generada`; "Todas" no envía filtros. Más recientes primero, `limit=20`.
+- "Ver más" pide `page=2`, agrega las filas y desaparece al llegar al total. Estados de carga, error con "Reintentar" y vacío "Aún no hay órdenes".
+- Actualización: al volver a la pestaña, al deslizar hacia abajo (nativo) y por sondeo cada 15 s mientras la pestaña está enfocada: una orden nueva aparece sin recargar (en la prueba, a los 13 s, con un `GET /orders` cada 15 s) y al cambiar de pestaña no hay más `GET /orders`. El sondeo es una decisión de T10 (en web no hay otra forma de ver órdenes nuevas); HU-21 y RF-031 no lo piden.
+- Cambio de estado: tocar la tarjeta muestra ítems (`GET /orders/:id`), nota y acciones; "Empezar preparación", "Marcar lista" y "Marcar entregada" envían un único `PATCH` y refrescan la lista; en estados finales no hay acciones; mientras se envía los botones están deshabilitados.
+- "Cancelar" pide una segunda confirmación en línea ("Sí, cancelar orden" / "No, volver") y no envía nada hasta confirmar. Un 409 muestra "La orden ya cambió de estado. Actualizamos la lista." y refresca.
+- Rol: sin `orders:update` no hay acciones.
+- Ajustes: guardar con `+54 9 11 4444-1234` envía `whatsapp_number: "+5491144441234"` y el nombre; la barra superior muestra el nombre nuevo; vacío envía `null`; un número inválido muestra el mensaje en línea y no envía; sin `stores:update` los campos son de solo lectura y no hay "Guardar"; "Cerrar sesión" borra el token y vuelve a `/admin/login`. Un 401 vuelve a `/admin/login`.
+- Pendiente: backend real, Android, deslizar para actualizar en web (sin efecto), `Mesa` del diseño (la API no tiene ese dato), y "Ver más" tras un cambio de estado vuelve a la primera página.
+
+### Backoffice: pantallas y contenido (BO-04, BO-05, HU-12, HU-13, RF-018 a RF-020, T11)
+
+Automatizado: `cd mobile && npm test` ejecuta `content-rules.test.ts` (imagen JPG, PNG o WebP hasta exactamente 5 MB y video MP4 hasta exactamente 50 MB; rechaza lo que supera cada límite, otros tipos y tipo desconocido; el tamaño desconocido pasa; duración entera de 3 a 60; `moveItem` sube y baja devolviendo la lista completa, sin mutar y sin efecto en los extremos; título "1 · nombre sin extensión" y subtítulo "Imagen · 10 s" o "Video · 30 s"; mensajes para `VIDEO_TOO_LONG`, 413, 415, `MEDIA_UNREADABLE`, `CONTENT_LIST_MISMATCH`, `CONTENT_NOT_FOUND`, 403 y sin conexión; nombre de pantalla de 1 a 80 caracteres).
+
+Manual / no funcional (Chromium, 390x844, `local1.localhost:8081/admin/pantallas`, **API interceptada con `page.route`** desde `docs/api.md`, no el backend real):
+- Pantallas: la primera pantalla queda seleccionada y su enlace aparece en el recuadro oscuro; tocar otra cambia el enlace; "Copiar enlace" escribe `player_url` en el portapapeles y muestra "Enlace copiado". Cada fila muestra "Activa" o "Inactiva" según `is_active` (la API no entrega última conexión, por eso no hay "En línea · hace 12 s").
+- "+ Nueva pantalla": nombre vacío muestra "Ingresá el nombre."; con nombre, doble clic envía un solo `POST /screens` con `store_id` y `name`, la pantalla nueva queda seleccionada. Estados de carga, error con "Reintentar" y vacío.
+- Contenido ("Contenido de pantalla", `/admin/pantallas/contenido`, la pestaña Pantallas sigue activa): lista en orden con "1 · nombre", "Imagen · 10 s" o "Video · 30 s". Subir una imagen y un video envía `POST /content` multipart con `file` y `store_id` y los agrega al final; un archivo de más de 5 MB (imagen), de más de 50 MB (video) o de otro tipo muestra el mensaje y no envía; un 422 `VIDEO_TOO_LONG` muestra "El video dura más de 60 segundos."; mientras sube el botón queda en carga y no admite un segundo envío.
+- Orden: las flechas suben y bajan, envían `PUT /content/order` con todos los ids (también los ocultos) y actualizan en el acto; si el `PUT` falla (500) la lista vuelve al orden anterior con el error en línea. Los extremos tienen la flecha deshabilitada.
+- Tocar una fila muestra "Eliminar" con una segunda confirmación ("Sí, eliminar" / "No, volver") y envía `DELETE /content/:id` solo al confirmar; en imágenes, "Segundos en pantalla" valida 3 a 60 en línea y envía `PATCH` con `duration_seconds`. Roles: sin `content:update` no hay flechas ni duración, sin `content:delete` no hay eliminar, sin `content:create` no hay subir, sin `screens:create` no hay "+ Nueva pantalla".
+- Un 401 al abrir el contenido vuelve a `/admin/login` y borra el token.
+- Pendiente: backend real (`ffprobe`, límite de 50 MB de Multer, 413 y 415 reales); Android (`expo-image-picker` con video, `FormData` con `{uri, name, type}`, `expo-clipboard`); elegir un video real en un navegador real; la duración de un video se valida solo en el servidor; arrastrar para ordenar (el diseño lo muestra, se reemplazó por flechas); regenerar token y borrar pantalla (fuera de alcance).
+
+### Reproductor de pantalla y origen QR (PL-01, HU-14, HU-15, HU-16, RF-021 a RF-025, RNF-009, T12)
+
+Automatizado: `cd mobile && npm test` ejecuta `playlist-rules.test.ts` (índice siguiente con vuelta al inicio y listas vacías; índice acotado cuando la lista se achica; una playlist nueva espera al fin del elemento en curso y arranca desde su primer elemento; misma versión descarta lo pendiente; una lista vacía se reemplaza al instante; un solo elemento sigue en bucle; decisión de sondeo para 200, 304, 404 y falla de red; serializar y leer la caché, tolerando nulo, vacío, no JSON, sin `items`, item inválido, sin `qr_url` y duración 0; tiempo máximo del video con gracia; host y ruta del QR sin query) y `source-screen.test.ts` (`src` UUID válido en minúsculas, vacío, `abc`, truncado y repetido se ignoran o se toma el primero; `source_screen_id` solo se envía si hay uno).
+
+Manual / no funcional (Chromium, 1280x720, `local1.localhost:8081/screen/tokA`, **API interceptada con `page.route`** desde `docs/api.md`, no el backend real; el reproductor usa `poll_interval_seconds: 2` y duraciones de 3 s para acortar):
+- Rotación en el orden recibido y vuelta al inicio; la petición no lleva `Authorization`, lleva `X-Tenant-Slug: local1`; la primera sin `If-None-Match` y las siguientes con `"<version>"`; el 304 no cambia nada.
+- Versión nueva: no corta el elemento en curso, se aplica al terminar y arranca por su primer elemento. Sin red (petición abortada) sigue rotando; al volver la red sincroniza en la siguiente rotación sin recargar.
+- Recarga sin red con caché (`localStorage` `player:<tenant>:<token>`): reproduce lo guardado. Sin caché y sin red: "Esperando conexión para cargar el contenido…" y se recupera sola al siguiente ciclo de 30 s.
+- 404 al inicio: "Pantalla no válida", sin imágenes ni video. 404 durante la reproducción: lo mismo y se borra la caché. Playlist vacía: panel naranja con el nombre del local y el QR visible.
+- Medio roto (404 en una imagen): se omite tras 1 s y sigue. Video WebM real (VP9, 2 s) con `autoplay muted playsInline`: reproduce y avanza al terminar (`ended`), antes del respaldo por tiempo. MP4 H.264 no se probó con éxito: el Chromium de Playwright lo rechazó y se saltó como medio roto.
+- QR: el SVG (corrección Q, margen de 4 módulos) se decodificó desde la captura con `jsqr` y devolvió exactamente `qr_url`; lado de 28% del alto (RNF-009 pide al menos 8%); bajo el QR, host y ruta sin `?src`.
+- Origen: `/palermo?src=<uuid>` guarda `src:<tenant>:<local>` en `sessionStorage` y el `POST /orders` lleva `source_screen_id`; con `?src=abc` o sin `src` el campo no está. `/admin` sigue yendo a `/admin/login` y `/` a `/palermo`.
+- Pendiente: backend real y CORS real con `If-None-Match`; escaneo con celulares reales a 1,5 m (RNF-009, solo inferido por la decodificación por software); televisor real; pérdida de red real (se simuló abortando la petición); Android (el reproductor muestra "El reproductor se abre desde un navegador web."); la fila `QR` del backoffice solo está cubierta por la prueba unitaria de `orderSummary`; no hay service worker, así que los archivos se cachean solo con el caché HTTP del navegador (`immutable`) y offline desde cero no se ven hasta haberlos visto una vez; la marca "Pantalla no válida" va con mayúscula inicial.
+
+### Layout de escritorio en web (T13)
+
+Sin pruebas automatizadas: es solo layout. Regla: en web, desde 900 px de ancho. El diseño no tiene pantallas de escritorio, así que no hay referencia contra la cual comparar.
+
+Manual / no funcional (Chromium, 390x844, 1280x800 y 1920x1080; backoffice con login real contra el backend local en catálogo, ajustes y nuevo producto; listas de pantallas, contenido y órdenes con GET interceptados; autopedido con catálogo real y `POST /orders` interceptado):
+- Sin scroll horizontal en catálogo, pantallas, contenido, órdenes, ajustes y nuevo producto en los tres tamaños (`scrollWidth` igual a `innerWidth`).
+- 1280 y 1920: menú lateral de 220 px pegado al borde izquierdo y barra superior hasta el borde derecho. Catálogo, pantallas y contenido en grilla (5 columnas de catálogo en 1920, 2 de contenido en 1280). Editor y ajustes hasta 560 px, órdenes hasta 760 px, botones de acción y recuadro del enlace hasta 560 px.
+- 1280 y 1920, autopedido: catálogo hasta 960 px en grilla; carrito, confirmación y pedido registrado en columna centrada de 520 px, con el botón inferior alineado a la columna.
+- 390: barra inferior y botones a todo el ancho, igual que antes del cambio.
+- Pendiente: Android (`useWide` es falso fuera de web); cruzar 900 px redimensionando con un formulario a medio llenar; contenido con un elemento expandido dentro de la grilla. En la grilla del autopedido, las tarjetas de una fila pueden diferir unos píxeles de alto si la descripción ocupa dos líneas.

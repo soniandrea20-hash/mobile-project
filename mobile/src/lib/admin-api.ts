@@ -1,0 +1,156 @@
+import { Platform } from 'react-native';
+
+import type { OrderStatus } from '@/components/ui/mostrador/badge';
+import { authRequest, resolveImageUrl } from '@/lib/api';
+
+export type Category = { category_id: string; name: string; sort_order: number };
+
+export type Product = {
+  product_id: string;
+  category_id: string;
+  name: string;
+  description: string | null;
+  price: string;
+  image_url: string | null;
+  is_available: boolean;
+};
+
+export type ProductInput = {
+  category_id: string;
+  name: string;
+  description?: string | null;
+  price: string;
+  is_available: boolean;
+};
+
+export type PickedImage = {
+  uri: string;
+  fileName?: string | null;
+  mimeType?: string | null;
+  file?: File;
+};
+
+const withImage = (p: Product): Product => ({ ...p, image_url: resolveImageUrl(p.image_url) });
+const json = (method: string, body: unknown) => ({ method, body: JSON.stringify(body) });
+
+export const listCategories = (storeId: string) =>
+  authRequest<Category[]>(`/categories?store_id=${storeId}`);
+
+export const createCategory = (storeId: string, name: string, sortOrder: number) =>
+  authRequest<Category>('/categories', json('POST', { store_id: storeId, name, sort_order: sortOrder }));
+
+export const listProducts = async (storeId: string, categoryId?: string) => {
+  const query = `store_id=${storeId}${categoryId ? `&category_id=${categoryId}` : ''}`;
+  return (await authRequest<Product[]>(`/products?${query}`)).map(withImage);
+};
+
+export const getProduct = async (id: string) => withImage(await authRequest<Product>(`/products/${id}`));
+
+export const createProduct = (storeId: string, input: ProductInput) =>
+  authRequest<Product>('/products', json('POST', { store_id: storeId, ...input }));
+
+export const updateProduct = (id: string, input: Partial<ProductInput>) =>
+  authRequest<Product>(`/products/${id}`, json('PATCH', input));
+
+/** Web sends the File the picker gives; native sends the `{uri, name, type}` shape React Native understands. */
+export async function buildImageForm(image: PickedImage): Promise<FormData> {
+  const form = new FormData();
+  const type = image.mimeType ?? 'image/jpeg';
+  if (Platform.OS === 'web') {
+    form.append('file', image.file ?? (await (await fetch(image.uri)).blob()), image.fileName ?? 'image');
+  } else {
+    form.append('file', { uri: image.uri, name: image.fileName ?? 'image', type } as unknown as Blob);
+  }
+  return form;
+}
+
+export async function uploadProductImage(id: string, image: PickedImage) {
+  return withImage(await authRequest<Product>(`/products/${id}/image`, { method: 'PUT', body: await buildImageForm(image) }));
+}
+
+export type OrderSummary = {
+  order_id: string;
+  order_number: number;
+  status: OrderStatus;
+  customer_name: string | null;
+  note: string | null;
+  total: string;
+  items_count: number;
+  source_screen: { screen_id: string; name: string } | null;
+  created_at: string;
+};
+
+export type OrderItem = { line_number: number; product_name: string; quantity: number; line_total: string };
+
+export type Order = OrderSummary & { items: OrderItem[] };
+
+export type OrderQuery = { status?: OrderStatus; from?: string; to?: string; page: number };
+
+export const ORDERS_PAGE_SIZE = 20;
+
+export function listOrders(storeId: string, { status, from, to, page }: OrderQuery) {
+  const params = new URLSearchParams({ store_id: storeId, page: String(page), limit: String(ORDERS_PAGE_SIZE) });
+  if (status) params.set('status', status);
+  if (from) params.set('from', from);
+  if (to) params.set('to', to);
+  return authRequest<{ data: OrderSummary[]; meta: { page: number; limit: number; total: number } }>(`/orders?${params}`);
+}
+
+export const getOrder = (id: string) => authRequest<Order>(`/orders/${id}`);
+
+export const updateOrderStatus = (id: string, status: OrderStatus) =>
+  authRequest<Order>(`/orders/${id}/status`, json('PATCH', { status }));
+
+export type Store = {
+  store_id: string;
+  name: string;
+  whatsapp_number: string | null;
+  self_order_url: string;
+};
+
+export const getStore = (id: string) => authRequest<Store>(`/stores/${id}`);
+
+export const updateStore = (id: string, input: { name?: string; whatsapp_number?: string | null }) =>
+  authRequest<Store>(`/stores/${id}`, json('PATCH', input));
+
+export type ContentItem = {
+  content_id: string;
+  type: 'image' | 'video';
+  url: string;
+  original_name: string;
+  duration_seconds: number;
+  is_visible: boolean;
+};
+
+const withUrl = (c: ContentItem): ContentItem => ({ ...c, url: resolveImageUrl(c.url) ?? c.url });
+
+export const listContent = async (storeId: string) =>
+  (await authRequest<ContentItem[]>(`/content?store_id=${storeId}`)).map(withUrl);
+
+export async function uploadContent(storeId: string, file: PickedImage, durationSeconds?: number) {
+  const form = await buildImageForm(file);
+  form.append('store_id', storeId);
+  if (durationSeconds !== undefined) form.append('duration_seconds', String(durationSeconds));
+  return withUrl(await authRequest<ContentItem>('/content', { method: 'POST', body: form }));
+}
+
+export const updateContent = async (id: string, input: { duration_seconds?: number; is_visible?: boolean }) =>
+  withUrl(await authRequest<ContentItem>(`/content/${id}`, json('PATCH', input)));
+
+export const reorderContent = (storeId: string, contentIds: string[]) =>
+  authRequest<ContentItem[]>('/content/order', json('PUT', { store_id: storeId, content_ids: contentIds }));
+
+export const deleteContent = (id: string) => authRequest<unknown>(`/content/${id}`, { method: 'DELETE' });
+
+export type Screen = {
+  screen_id: string;
+  name: string;
+  token: string;
+  player_url: string;
+  is_active: boolean;
+};
+
+export const listScreens = (storeId: string) => authRequest<Screen[]>(`/screens?store_id=${storeId}`);
+
+export const createScreen = (storeId: string, name: string) =>
+  authRequest<Screen>('/screens', json('POST', { store_id: storeId, name }));
