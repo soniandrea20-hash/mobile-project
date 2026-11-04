@@ -42,7 +42,7 @@ export default function CatalogScreen() {
   const [capReached, setCapReached] = useState(false);
   const [selected, setSelected] = useState<PublicProduct | null>(null);
   const inCart = lines.find((l) => l.productId === selected?.product_id)?.quantity ?? 0;
-  // Memoized so the sheet's reset effect does not fire on every catalog render.
+  // Memoized so the sheet's reset-on-change does not fire on every render.
   const detail = useMemo(
     () =>
       selected && {
