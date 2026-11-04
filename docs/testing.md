@@ -165,6 +165,8 @@ Convenciones: los pasos se numeran; "Automatizado" indica herramienta; "No (manu
 
 Los casos de estrés usan, salvo que se indique "meta propuesta", las metas de `docs/no-funcional.md`: p95 < 500 ms y errores < 1% (RNF-003). Las cantidades de usuarios virtuales (VUs), duraciones y volúmenes de cada caso son el escenario de prueba y se ajustan en la primera corrida en staging.
 
+**Scripts k6 de RNF-003 (R2).** Están en `perf/k6/` y se corren con `k6 run -e BASE_URL=... perf/k6/<script>.js` (detalle en `perf/README.md`): TC-112 en `catalog-orders.js`; la carga de 200 VUs en catálogo con 100 pantallas consultando cada 30 s en `stress.js`; TC-188 en `stress.js` con `-e SCENARIO=breakpoint`; TC-180 en `tenant-suspend.js` (requiere credenciales de Root por variables de entorno). Los umbrales (p95 < 500 ms, errores < 1%) hacen fallar k6 si no se cumplen. El estado de estos casos sigue **pendiente de ejecución**: no hay staging ni base local en el entorno de desarrollo, así que ninguna meta está medida. La palanca de código es la compresión gzip de las respuestas (`backend/src/http/setup-compression.ts`, probada en `backend/test/http/compression.spec.ts`: gzip, el 304 del player con su ETag y un evento de log por petición).
+
 | ID | HU | RF/RNF | Título | Precondiciones | Datos | Pasos | Resultado esperado | Tipo | Prioridad | Automatizado |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | TC-001 | HU-01 | RF-001, RF-035 | Alta de tenant válido | Sesión Root | slug "local3" | 1. POST /tenants con el slug<br>2. Abrir local3.mostrador.io | 201; tenant activo; el subdominio resuelve el tenant | Funcional feliz | Alta | Sí (supertest) |

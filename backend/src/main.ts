@@ -7,10 +7,12 @@ import { mediaBaseUrl } from './media/blob-container';
 import { uploadsDir } from './media/uploads-dir';
 import { logger } from './logging/app-logger';
 import { setupLogging } from './logging/setup-logging';
+import { setupCompression } from './http/setup-compression';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { logger });
   setupLogging(app, logger);
+  setupCompression(app);
   serveMedia(app, uploadsDir(), mediaBaseUrl());
 
   app.useGlobalPipes(
