@@ -5,9 +5,12 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import { serveMedia } from './media/serve-media';
 import { mediaBaseUrl } from './media/blob-container';
 import { uploadsDir } from './media/uploads-dir';
+import { logger } from './logging/app-logger';
+import { setupLogging } from './logging/setup-logging';
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { logger });
+  setupLogging(app, logger);
   serveMedia(app, uploadsDir(), mediaBaseUrl());
 
   app.useGlobalPipes(
@@ -23,8 +26,8 @@ async function bootstrap() {
       /^https?:\/\/[a-z0-9-]+\.localhost(:\d+)?$/,
       /^https:\/\/[a-z0-9-]+\.mostrador\.io$/,
     ],
-    allowedHeaders: ['Authorization', 'Content-Type', 'X-Tenant-Slug', 'If-None-Match'],
-    exposedHeaders: ['ETag'],
+    allowedHeaders: ['Authorization', 'Content-Type', 'X-Tenant-Slug', 'If-None-Match', 'X-Request-Id'],
+    exposedHeaders: ['ETag', 'X-Request-Id'],
   });
 
   await app.listen(process.env.PORT ?? 3000);

@@ -12,6 +12,8 @@ import { ScreensModule } from './screens/screens.module';
 import { StoresModule } from './stores/stores.module';
 import { ContentModule } from './content/content.module';
 import { TenantMiddleware } from './tenants/api/tenant.middleware';
+import { logger } from './logging/app-logger';
+import { TypeOrmLogger } from './logging/typeorm-logger';
 
 @Module({
   imports: [ 
@@ -33,6 +35,7 @@ import { TenantMiddleware } from './tenants/api/tenant.middleware';
         autoLoadEntities: true, //registra entidades de los modulos
         synchronize: false, //nunca en prod
         logging: config.get<string>('DB_LOGGING') === 'true',
+        logger: new TypeOrmLogger(logger),
         retryAttempts: 5,
         retryDelay: 3000,
       })

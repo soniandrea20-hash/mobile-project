@@ -54,6 +54,8 @@ Los identificadores RNF-xxx coinciden con `docs/requerimientos.xlsx`. Se agrupan
 | RNF-016 | Cobertura de pruebas del backend | Cobertura de líneas ≥ 70% en casos de uso | Jest con `--coverage` y umbral en CI | Media |
 | RNF-017 | Logging estructurado | 100% de logs en JSON con requestId y tenantId; 0 datos sensibles | Revisión de código y muestreo de logs | Media |
 
+Convención de RNF-017: un solo evento por solicitud HTTP, en stdout, con el esquema canónico; `request_id` y `tenant_id` van dentro de `events` (`tenant_id: null` si no se resolvió el tenant, por ejemplo en el host de administración). `LOG_MODE=json` en producción (se define en las variables de entorno del Container App; por defecto `clf`, una línea legible para desarrollo). Nunca se registran cuerpos, encabezados crudos ni claves `password`, `token`, `authorization`, `cookie` o `secret`.
+
 ## Portabilidad
 
 | ID | Descripción | Meta medible | Verificación | Prioridad |
