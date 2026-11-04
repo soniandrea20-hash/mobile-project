@@ -1,4 +1,5 @@
 import {
+  activeItems,
   advance,
   clampIndex,
   initialPlayerState,
@@ -14,7 +15,7 @@ import {
 } from '@/lib/playlist-rules';
 
 const item = (id: string, type: 'image' | 'video' = 'image', duration = 10) => ({
-  content_id: id,
+  media_id: id,
   type,
   url: `/media/${id}`,
   duration_seconds: duration,
@@ -25,7 +26,8 @@ const playlist = (version: string, ids: string[]): Playlist => ({
   poll_interval_seconds: 30,
   store: { name: 'Palermo', slug: 'palermo' },
   qr_url: 'https://local1.mostrador.io/palermo?src=abc',
-  items: ids.map((id) => item(id)),
+  default: { items: ids.map((id) => item(id)) },
+  slots: [],
 });
 
 describe('nextIndex / clampIndex', () => {
@@ -77,7 +79,7 @@ describe('receivePlaylist / advance', () => {
     s = receivePlaylist(s, playlist('v2', ['x', 'y']));
     s = advance(s);
     expect(s.index).toBe(0);
-    expect(s.current?.items).toHaveLength(2);
+    expect(s.items).toHaveLength(2);
   });
 
   it('una lista sin elementos se reemplaza al instante porque no hay nada que interrumpir', () => {
@@ -135,10 +137,11 @@ describe('caché de playlist', () => {
     ['nulo', null],
     ['vacío', ''],
     ['no JSON', '{no'],
-    ['sin items', JSON.stringify({ version: 'v', poll_interval_seconds: 30 })],
-    ['item inválido', JSON.stringify({ ...playlist('v', ['a']), items: [{ content_id: 'a', type: 'gif' }] })],
+    ['sin slots', JSON.stringify({ ...playlist('v', ['a']), slots: undefined })],
+    ['item inválido', JSON.stringify({ ...playlist('v', ['a']), default: { items: [{ media_id: 'a', type: 'gif' }] } })],
+    ['franja inválida', JSON.stringify({ ...playlist('v', ['a']), slots: [{ days: 'x', start: '08:00', end: '09:00', items: [] }] })],
     ['sin qr_url', JSON.stringify({ ...playlist('v', ['a']), qr_url: undefined })],
-    ['duración cero', JSON.stringify({ ...playlist('v', []), items: [item('a', 'image', 0)] })],
+    ['duración cero', JSON.stringify({ ...playlist('v', []), default: { items: [item('a', 'image', 0)] } })],
   ])('tolera datos corruptos: %s', (_name, raw) => {
     expect(parseCachedPlaylist(raw as string | null)).toBeNull();
   });
@@ -164,5 +167,64 @@ describe('qrLabel', () => {
 
   it('con una URL inválida devuelve el texto tal cual', () => {
     expect(qrLabel('no es url')).toBe('no es url');
+  });
+});
+
+describe('activeItems', () => {
+  // 2026-11-02 is a Monday and 2026-11-08 a Sunday (JS getDay: Sunday = 0).
+  const at = (day: number, h: number, m = 0) => new Date(2026, 10, day, h, m);
+  const MON = at(2, 9);
+  const withSlots = (slots: Playlist['slots'], def: string[] | null = ['d']): Playlist => ({
+    ...playlist('v', []),
+    default: def ? { items: def.map((id) => item(id)) } : null,
+    slots,
+  });
+  const slot = (days: number, start: string, end: string, ids: string[]) => ({
+    days,
+    start,
+    end,
+    items: ids.map((id) => item(id)),
+  });
+  const ids = (p: Playlist, now: Date) => activeItems(p, now).map((i) => i.media_id);
+
+  it('dentro de la franja usa sus items', () => {
+    expect(ids(withSlots([slot(1, '08:00', '12:00', ['s'])]), MON)).toEqual(['s']);
+  });
+
+  it('el inicio es inclusivo y el fin exclusivo', () => {
+    const p = withSlots([slot(1, '08:00', '12:00', ['s'])]);
+    expect(ids(p, at(2, 8, 0))).toEqual(['s']);
+    expect(ids(p, at(2, 11, 59))).toEqual(['s']);
+    expect(ids(p, at(2, 12, 0))).toEqual(['d']);
+    expect(ids(p, at(2, 7, 59))).toEqual(['d']);
+  });
+
+  it('franjas contiguas: a las 12:00 manda la segunda', () => {
+    const p = withSlots([slot(1, '08:00', '12:00', ['a']), slot(1, '12:00', '14:00', ['b'])]);
+    expect(ids(p, at(2, 12, 0))).toEqual(['b']);
+  });
+
+  it('convierte el día: lunes=1 y domingo=64', () => {
+    const p = withSlots([slot(64, '00:00', '23:59', ['dom'])]);
+    expect(ids(p, at(8, 10))).toEqual(['dom']);
+    expect(ids(p, at(2, 10))).toEqual(['d']);
+    const lun = withSlots([slot(1, '00:00', '23:59', ['lun'])]);
+    expect(ids(lun, at(2, 10))).toEqual(['lun']);
+    expect(ids(lun, at(8, 10))).toEqual(['d']);
+  });
+
+  it('una máscara con varios días aplica a cualquiera de ellos', () => {
+    const p = withSlots([slot(31, '08:00', '12:00', ['sem'])]);
+    expect(ids(p, at(6, 9))).toEqual(['sem']); // Friday
+    expect(ids(p, at(7, 9))).toEqual(['d']); // Saturday
+  });
+
+  it('una franja activa sin items cae a la playlist por defecto', () => {
+    expect(ids(withSlots([slot(1, '08:00', '12:00', [])]), MON)).toEqual(['d']);
+  });
+
+  it('sin franja activa y sin por defecto no hay nada', () => {
+    expect(activeItems(withSlots([slot(1, '08:00', '12:00', ['s'])], null), at(2, 13))).toEqual([]);
+    expect(activeItems(withSlots([], null), MON)).toEqual([]);
   });
 });

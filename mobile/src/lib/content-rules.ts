@@ -5,7 +5,8 @@ const LIMITS = { image: 5 * MB, video: 50 * MB };
 const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const BAD_TYPE = 'Elegí una imagen o un video MP4.';
 const OFFLINE = 'No se pudo conectar con el servidor.';
-const BAD_DURATION = 'Ingresá segundos enteros de 3 a 60.';
+
+export const DEFAULT_IMAGE_SECONDS = 10;
 
 export type MediaKind = 'image' | 'video';
 
@@ -25,11 +26,9 @@ export function checkMedia(asset: { mimeType?: string | null; fileSize?: number 
   return { kind, error: null };
 }
 
-export function parseDuration(input: string): { seconds: number } | { error: string } {
-  const text = input.trim();
-  const n = Number(text);
-  return /^\d+$/.test(text) && n >= 3 && n <= 60 ? { seconds: n } : { error: BAD_DURATION };
-}
+/** Body of `PUT /playlists/:id/items`: videos keep their real length and must not send one. */
+export const itemsPayload = (items: { media_id: string; type: MediaKind; duration_seconds: number }[]) =>
+  items.map((i) => (i.type === 'video' ? { media_id: i.media_id } : { media_id: i.media_id, duration_seconds: i.duration_seconds }));
 
 /** Returns a new list with the item at `index` swapped with its neighbour; ends are a no-op. */
 export function moveItem<T>(items: T[], index: number, direction: -1 | 1): T[] {
@@ -40,14 +39,10 @@ export function moveItem<T>(items: T[], index: number, direction: -1 | 1): T[] {
   return next;
 }
 
-type Row = { type: MediaKind; original_name: string; duration_seconds: number };
-
-// The API has no title field, so the row shows the uploaded file name.
-export const contentTitle = (item: Row, index: number) =>
-  `${index + 1} · ${item.original_name.replace(/\.[^.]+$/, '')}`;
+type Row = { type: MediaKind; original_name: string; duration_seconds: number | null };
 
 export const contentSubtitle = (item: Row) =>
-  `${item.type === 'image' ? 'Imagen' : 'Video'} · ${item.duration_seconds} s`;
+  (item.type === 'image' ? 'Imagen' : 'Video') + (item.duration_seconds === null ? '' : ` · ${item.duration_seconds} s`);
 
 export function contentErrorMessage(error: unknown): string {
   if (error instanceof ApiError) {
@@ -55,8 +50,10 @@ export function contentErrorMessage(error: unknown): string {
     if (error.code === 'MEDIA_TOO_LARGE') return 'El archivo supera el límite de tamaño.';
     if (error.code === 'UNSUPPORTED_MEDIA_TYPE') return BAD_TYPE;
     if (error.code === 'MEDIA_UNREADABLE') return 'No se pudo leer el archivo. Probá con otro.';
-    if (error.code === 'CONTENT_LIST_MISMATCH') return 'La lista cambió. Actualizamos el contenido.';
-    if (error.code === 'CONTENT_NOT_FOUND') return 'El contenido ya no existe.';
+    if (error.code === 'MEDIA_IN_USE') return 'Está en uso en una lista; quitalo de la lista primero.';
+    if (error.code === 'MEDIA_NOT_FOUND') return 'El medio ya no existe.';
+    if (error.code === 'PLAYLIST_NOT_FOUND') return 'La lista ya no existe.';
+    if (error.code === 'DURATION_REQUIRED') return 'Cada imagen necesita su duración (3 a 60 s).';
     if (error.status === 403) return 'No tenés permiso para esta acción.';
     if (error.status === 0) return OFFLINE;
   }

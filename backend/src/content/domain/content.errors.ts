@@ -1,10 +1,13 @@
-import { BadRequestException, HttpException, NotFoundException, UnprocessableEntityException } from "@nestjs/common";
+import { BadRequestException, ConflictException, HttpException, NotFoundException, UnprocessableEntityException } from "@nestjs/common";
 
-export const storeNotFound = () =>
-    new NotFoundException({ statusCode: 404, message: 'Store not found', error: 'Not Found', code: 'STORE_NOT_FOUND' });
+export const mediaNotFound = () =>
+    new NotFoundException({ statusCode: 404, message: 'Media not found', error: 'Not Found', code: 'MEDIA_NOT_FOUND' });
 
-export const contentNotFound = () =>
-    new NotFoundException({ statusCode: 404, message: 'Content not found', error: 'Not Found', code: 'CONTENT_NOT_FOUND' });
+export const playlistNotFound = () =>
+    new NotFoundException({ statusCode: 404, message: 'Playlist not found', error: 'Not Found', code: 'PLAYLIST_NOT_FOUND' });
+
+export const mediaInUse = () =>
+    new ConflictException({ statusCode: 409, message: 'The media is used in a playlist', error: 'Conflict', code: 'MEDIA_IN_USE' });
 
 export const emptyUpdate = () =>
     new BadRequestException({ statusCode: 400, message: 'Send at least one field to update', error: 'Bad Request', code: 'EMPTY_UPDATE' });
@@ -30,5 +33,5 @@ export const videoTooLong = () =>
 export const durationNotAllowed = () =>
     new UnprocessableEntityException({ statusCode: 422, message: 'duration_seconds applies to images only', error: 'Unprocessable Entity', code: 'DURATION_NOT_ALLOWED' });
 
-export const contentListMismatch = () =>
-    new UnprocessableEntityException({ statusCode: 422, message: 'content_ids must contain every content of the store exactly once', error: 'Unprocessable Entity', code: 'CONTENT_LIST_MISMATCH' });
+export const durationRequired = () =>
+    new UnprocessableEntityException({ statusCode: 422, message: 'duration_seconds is required for images', error: 'Unprocessable Entity', code: 'DURATION_REQUIRED' });

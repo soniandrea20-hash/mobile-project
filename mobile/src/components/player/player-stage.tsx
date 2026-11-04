@@ -1,7 +1,8 @@
-import type { Playlist } from '@/lib/playlist-rules';
+import type { PlaylistItem } from '@/lib/playlist-rules';
 
 export type PlayerStageProps = {
-  playlist: Playlist;
+  items: PlaylistItem[];
+  storeName: string;
   index: number;
   cycle: number;
   qrUrl: string | null;

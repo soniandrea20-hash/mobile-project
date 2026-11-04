@@ -10,7 +10,7 @@ Convenciones: PostgreSQL; claves primarias `UUID` con `gen_random_uuid()` (igual
 | --- | --- |
 | Existente (no se renombra nada) | `users`, `roles`, `users_roles`, `tenants`, `stores`, `users_tenants`, `users_stores`, `permissions`, `roles_permissions` |
 | Cambia en R1 | `tenants` (columnas `slug`, `last_order_number`), `stores` (columnas `slug`, `whatsapp_number`, `created_at`) |
-| Nuevas en R1 | `categories`, `products`, `content_items`, `screens`, `orders`, `order_items` |
+| Nuevas en R1 | `categories`, `products`, `media_items`, `playlists`, `playlist_items`, `screens`, `screen_playlists`, `orders`, `order_items` |
 | Fuera de R1 | ver sección 9 |
 
 ## 2. Diagrama entidad-relación
@@ -31,11 +31,16 @@ erDiagram
     stores ||--o{ users_stores : "empleados"
     stores ||--o{ categories : "catalogo"
     stores ||--o{ products : "catalogo"
-    stores ||--o{ content_items : "playlist"
+    tenants ||--o{ media_items : "biblioteca"
+    tenants ||--o{ playlists : "playlists"
+    playlists ||--o{ playlist_items : "items"
+    media_items ||--o{ playlist_items : "usado en"
     stores ||--o{ screens : "pantallas"
     stores ||--o{ orders : "recibe"
     categories ||--o{ products : "agrupa"
     screens ||--o{ orders : "origen"
+    screens ||--o{ screen_playlists : "agenda"
+    playlists ||--o{ screen_playlists : "asignada"
     users ||--o{ orders : "cambio de estado"
     orders ||--|{ order_items : "lineas"
     products ||--o{ order_items : "referencia"
@@ -77,15 +82,32 @@ erDiagram
         boolean is_available
         int sort_order
     }
-    content_items {
-        uuid content_id PK
+    media_items {
+        uuid media_id PK
         uuid tenant_id FK
-        uuid store_id FK
         varchar type "image o video"
         varchar file_path
-        smallint duration_seconds
-        int sort_order
-        boolean is_visible
+        smallint duration_seconds "solo video"
+    }
+    playlists {
+        uuid playlist_id PK
+        uuid tenant_id FK
+        varchar name
+    }
+    playlist_items {
+        uuid playlist_item_id PK
+        uuid playlist_id FK
+        uuid media_id FK
+        int position
+        smallint duration_seconds "solo imagen"
+    }
+    screen_playlists {
+        uuid screen_playlist_id PK
+        uuid screen_id FK
+        uuid playlist_id FK
+        smallint days "bitmask, NULL=por defecto"
+        time start_time
+        time end_time
     }
     screens {
         uuid screen_id PK
@@ -124,8 +146,8 @@ erDiagram
 | Decisión | Motivo | Cómo evoluciona en R2 |
 | --- | --- | --- |
 | El catálogo (categorías y productos) y la playlist cuelgan del **local** (`store_id`), no solo del tenant | RF-010 pide nombre de categoría único por local y RF-014 devuelve el catálogo de un local. | Varios locales por tenant ya funcionan sin cambios. |
-| **No existe `screen_content`**: la playlist es una sola por local (`content_items`) y todas las pantallas del local la reproducen | RF-019 pide orden, duración y ocultar, pero ningún RF exige playlists distintas por pantalla. Ahorra una tabla y un endpoint. | Si se piden playlists por pantalla, se agrega `screen_content (screen_id, content_id, sort_order)` y `content_items.sort_order` pasa a ser el orden por defecto. |
-| `content_items.duration_seconds` es una sola columna: tiempo en pantalla de la imagen (3 a 60) o duración real del video (1 a 60) | Evita dos columnas mutuamente excluyentes; el reproductor siempre suma `duration_seconds`. | Sin cambios. |
+| El catálogo (categorías y productos) cuelga del **local**, pero la biblioteca de medios y las playlists cuelgan del **tenant** | Un medio y una playlist se reutilizan entre locales y pantallas; la pantalla sigue siendo de un local. | Sin cambios. |
+| La duración de una **imagen** es del item de playlist (`playlist_items.duration_seconds`), no del medio; la del **video** es la real (`media_items.duration_seconds`) | El mismo medio puede aparecer varias veces con tiempos distintos. El player usa la duración efectiva (`COALESCE(item, medio)`). | Sin cambios. |
 | No hay columna `version` de la playlist: se calcula en cada consulta (hash del contenido) | Una columna almacenada se desincroniza al borrar o cambiar filas; la playlist tiene pocas filas. | Si hubiera cientos de ítems, se cachea el hash. |
 | Número público del pedido por tenant con `tenants.last_order_number` incrementado dentro de la transacción de alta | El `UPDATE ... RETURNING` toma un bloqueo de fila: dos pedidos simultáneos del mismo tenant nunca obtienen el mismo número, sin secuencias por tenant. | Sin cambios. |
 | `order_items` guarda `product_name` y `unit_price` (snapshot) y `product_id` con `ON DELETE SET NULL` | El pedido debe seguir siendo correcto aunque el producto se edite o se borre después. | Sin cambios. |
@@ -222,32 +244,63 @@ Todas las columnas `created_at` y `updated_at` son `TIMESTAMPTZ NOT NULL DEFAULT
 | `ix_products_store_available` | (`store_id`, `is_available`) | Consulta caliente del catálogo público: productos disponibles de un local (RF-014); también sirve el listado del backoffice por local. |
 | `ix_products_category` | (`category_id`) | Hace barata la comprobación `RESTRICT` al borrar una categoría y el filtro por categoría. |
 
-### 6.3 `content_items`
+### 6.3 `media_items`, `playlists` y `playlist_items`
 
-Contenido (imagen o video) de la playlist de un local.
+La biblioteca de medios y las playlists son **del tenant** (no cuelgan de un local): un medio se sube una vez y se reutiliza en muchas playlists; una playlist se asigna a pantallas de cualquier local del tenant (6.4).
+
+**`media_items`**: imagen o video de la biblioteca.
 
 | Columna | Tipo | Nulo | Default | Restricción | Por qué existe |
 | --- | --- | --- | --- | --- | --- |
-| `content_id` | UUID | no | `gen_random_uuid()` | PK | |
-| `tenant_id` | UUID | no | | FK `tenants` | Aislamiento. |
-| `store_id` | UUID | no | | FK `stores` | Cada local tiene su playlist. |
+| `media_id` | UUID | no | `gen_random_uuid()` | PK | |
+| `tenant_id` | UUID | no | | FK `tenants` | Aislamiento; la biblioteca es del tenant. |
 | `type` | VARCHAR(10) | no | | CHECK `type IN ('image','video')` | Decide cómo lo reproduce el player. |
 | `file_path` | VARCHAR(255) | no | | | Ruta relativa dentro de `UPLOADS_DIR` (`<tenant_id>/content/<uuid>.<ext>`). El nombre es un UUID: la URL no se adivina y nunca cambia, por lo que el player puede cachearla (RF-024). |
 | `original_name` | VARCHAR(255) | no | | | Nombre que subió el usuario; solo se muestra en el backoffice. |
 | `mime_type` | VARCHAR(50) | no | | CHECK `mime_type IN ('image/jpeg','image/png','image/webp','video/mp4')` | Tipo validado por contenido real del archivo (no por el encabezado del cliente). |
 | `size_bytes` | BIGINT | no | | CHECK `size_bytes > 0` AND ((`type`='image' AND `size_bytes` <= 5242880) OR (`type`='video' AND `size_bytes` <= 52428800)) | Respaldo en base de los límites de 5 MB y 50 MB (RF-018, RNF-005). |
-| `duration_seconds` | SMALLINT | no | | CHECK (`type`='image' AND `duration_seconds` BETWEEN 3 AND 60) OR (`type`='video' AND `duration_seconds` BETWEEN 1 AND 60) | Imagen: segundos en pantalla (3 a 60, RF-019). Video: duración real medida al subir, redondeada hacia arriba, máximo 60 s (RF-018). |
-| `sort_order` | INTEGER | no | | | Posición en la playlist; la API siempre lo deja consecutivo (1, 2, 3...). Al subir se agrega al final. |
-| `is_visible` | BOOLEAN | no | `TRUE` | | Permite ocultar un contenido sin borrarlo (RF-019). |
-| `created_at`, `updated_at` | TIMESTAMPTZ | no | `CURRENT_TIMESTAMP` | | `updated_at` entra en el cálculo de `version` de la playlist. |
+| `duration_seconds` | SMALLINT | sí | | CHECK (`type`='image' AND `duration_seconds` IS NULL) OR (`type`='video' AND `duration_seconds` BETWEEN 1 AND 60) | Video: duración real medida al subir, redondeada hacia arriba, máximo 60 s (RF-018). Imagen: `NULL`; su duración se define en cada item de playlist. |
+| `created_at`, `updated_at` | TIMESTAMPTZ | no | `CURRENT_TIMESTAMP` | | |
 
 Índices:
 
 | Índice | Definición | Por qué existe |
 | --- | --- | --- |
-| `ix_content_items_store_order` | (`store_id`, `sort_order`) | Camino caliente: cada pantalla consulta la playlist ordenada de su local cada 30 s (RF-023). |
+| `ix_media_items_tenant_created` | (`tenant_id`, `created_at` DESC) | Listado de la biblioteca del tenant, más recientes primero. |
 
-### 6.4 `screens`
+**`playlists`**: lista ordenada y reutilizable de medios.
+
+| Columna | Tipo | Nulo | Default | Restricción | Por qué existe |
+| --- | --- | --- | --- | --- | --- |
+| `playlist_id` | UUID | no | `gen_random_uuid()` | PK | |
+| `tenant_id` | UUID | no | | FK `tenants` | Aislamiento. |
+| `name` | VARCHAR(80) | no | | CHECK `length(btrim(name)) >= 1` | Nombre visible en el backoffice; no es único. |
+| `created_at`, `updated_at` | TIMESTAMPTZ | no | `CURRENT_TIMESTAMP` | | |
+
+Índices:
+
+| Índice | Definición | Por qué existe |
+| --- | --- | --- |
+| `ix_playlists_tenant_name` | (`tenant_id`, `lower(name)`) | Listado de playlists del tenant ordenado por nombre sin distinguir mayúsculas. |
+
+**`playlist_items`**: medios de una playlist, en orden.
+
+| Columna | Tipo | Nulo | Default | Restricción | Por qué existe |
+| --- | --- | --- | --- | --- | --- |
+| `playlist_item_id` | UUID | no | `gen_random_uuid()` | PK | |
+| `playlist_id` | UUID | no | | FK `playlists` `ON DELETE CASCADE` | Al borrar la playlist se borran sus items. |
+| `media_id` | UUID | no | | FK `media_items` `ON DELETE RESTRICT` | Implementa que no se borra un medio que está en uso (409 `MEDIA_IN_USE`). El mismo medio puede aparecer varias veces. |
+| `position` | INTEGER | no | | CHECK `position >= 1` | Posición en la playlist (1, 2, 3...); la API reemplaza la lista completa y la deja consecutiva. |
+| `duration_seconds` | SMALLINT | sí | | CHECK `duration_seconds BETWEEN 3 AND 60` | Imagen: segundos en pantalla (RF-019), distinto en cada item. Video: `NULL`, se usa la duración real del medio. Que sea obligatoria en imágenes y nula en videos lo valida la aplicación (depende de otra tabla). |
+
+Índices:
+
+| Índice | Definición | Por qué existe |
+| --- | --- | --- |
+| `uq_playlist_items_position` | UNIQUE (`playlist_id`, `position`) | Impide posiciones repetidas y sirve la lectura de los items en orden, camino caliente del player (RF-023). |
+| `ix_playlist_items_media` | (`media_id`) | Hace barata la comprobación `RESTRICT` al borrar un medio y la búsqueda de playlists que lo usan. |
+
+### 6.4 `screens` y `screen_playlists`
 
 | Columna | Tipo | Nulo | Default | Restricción | Por qué existe |
 | --- | --- | --- | --- | --- | --- |
@@ -264,6 +317,28 @@ Contenido (imagen o video) de la playlist de un local.
 | Índice | Definición | Por qué existe |
 | --- | --- | --- |
 | `uq_screens_token` | UNIQUE (`token`) | Garantiza tokens únicos y sirve la búsqueda por token que hace cada consulta del player (camino caliente, RF-021, RF-023). |
+
+
+**`screen_playlists`**: asignación de una playlist a una pantalla, por defecto o en una franja semanal. Una pantalla tiene como máximo una por defecto y cualquier cantidad de franjas.
+
+| Columna | Tipo | Nulo | Default | Restricción | Por qué existe |
+| --- | --- | --- | --- | --- | --- |
+| `screen_playlist_id` | UUID | no | `gen_random_uuid()` | PK | |
+| `screen_id` | UUID | no | | FK `screens` `ON DELETE CASCADE` | Pantalla a la que se asigna. |
+| `playlist_id` | UUID | no | | FK `playlists` `ON DELETE CASCADE` | Al borrar la playlist se quitan sus asignaciones. Que sea del mismo tenant que la pantalla lo valida la aplicación. |
+| `days` | SMALLINT | sí | | CHECK `ck_screen_playlists_schedule` | Días de la franja como máscara de bits (lunes=1, martes=2, ... domingo=64); `NULL` significa playlist por defecto. |
+| `start_time` | TIME | sí | | CHECK `ck_screen_playlists_schedule` | Inicio de la franja en hora local de la pantalla (el player usa su propio reloj); `NULL` en la por defecto. |
+| `end_time` | TIME | sí | | CHECK `ck_screen_playlists_schedule` | Fin exclusivo de la franja; siempre mayor que `start_time`, así que no cruza la medianoche. `NULL` en la por defecto. |
+
+`ck_screen_playlists_schedule`: o los tres campos de agenda son `NULL` (por defecto), o `days BETWEEN 1 AND 127` y `end_time > start_time` con ambas horas presentes. Que las franjas de una pantalla **no se solapen** lo valida la aplicación (una restricción de exclusión sobre máscara de días e intervalo de tiempo exigiría `btree_gist`; el contrato rechaza el solape con 422 `SLOT_OVERLAP`).
+
+Índices:
+
+| Índice | Definición | Por qué existe |
+| --- | --- | --- |
+| `uq_screen_playlists_default` | UNIQUE (`screen_id`) WHERE `days IS NULL` | Garantiza como máximo una playlist por defecto por pantalla (índice parcial). |
+| `ix_screen_playlists_screen` | (`screen_id`) | Camino caliente: cada pantalla lee su por defecto y sus franjas cada 30 s (RF-023), y el backoffice las edita. |
+| `ix_screen_playlists_playlist` | (`playlist_id`) | Sección "Pantallas" del editor de playlist y comprobación barata de la FK al borrar una playlist. |
 
 ### 6.5 `orders`
 
@@ -315,7 +390,7 @@ Clave primaria compuesta (`order_id`, `line_number`).
 
 Todo índice nuevo lleva `COMMENT ON INDEX ... IS '<motivo>'` en el script SQL, con el texto de la columna "Por qué existe" de arriba (la base ya sigue esta práctica con `uq_permissions_code`). Lista completa de índices que agrega R1:
 
-`uq_tenants_slug`, `uq_stores_tenant_slug`, `uq_categories_store_name`, `ix_products_store_available`, `ix_products_category`, `ix_content_items_store_order`, `uq_screens_token`, `uq_orders_tenant_number`, `ix_orders_store_created`, `ix_orders_store_status_created`, `order_items_pkey`.
+`uq_tenants_slug`, `uq_stores_tenant_slug`, `uq_categories_store_name`, `ix_products_store_available`, `ix_products_category`, `ix_media_items_tenant_created`, `ix_playlists_tenant_name`, `uq_playlist_items_position`, `ix_playlist_items_media`, `uq_screens_token`, `uq_screen_playlists_default`, `ix_screen_playlists_screen`, `ix_screen_playlists_playlist`, `uq_orders_tenant_number`, `ix_orders_store_created`, `ix_orders_store_status_created`, `order_items_pkey`.
 
 El motivo de cada uno está en la tabla "Índices" de su entidad (secciones 5.1, 5.2 y 6.1 a 6.6); el script debe copiar ese texto al comentario. Las claves primarias de una sola columna y las FK simples no llevan comentario ni índice propio salvo los listados arriba; las tablas existentes conservan sus comentarios.
 
@@ -323,10 +398,10 @@ El motivo de cada uno está en la tabla "Índices" de su entidad (secciones 5.1,
 
 - Los cambios de esquema se aplican **únicamente** con scripts SQL idempotentes en `database/scripts/`, ejecutados en orden por el runner `npm run db:apply` de `backend/scripts/db/`, que registra cada script en la tabla `schema_versions` (`version` = nombre del archivo sin `.sql`, `checksum` sha256, `applied_at`), lo corre dentro de una transacción y falla si cambió el checksum de un script ya aplicado.
 - **Están prohibidas las migraciones** de TypeORM, EF o cualquier otra herramienta. `synchronize` queda en `false` (como hoy en `app.module.ts`). Los ORM entities solo mapean las tablas.
-- **Estado actual del repositorio:** el runner `npm run db:apply` y el esquema completo (identidad, tenants y locales, catálogo, playlist, pantallas, pedidos, roles y permisos) viven en un único script, `database/scripts/001_schema.sql`, que se reescribe en estado final mientras el proyecto está en desarrollo (la base se recrea desde cero). Debe ser idempotente por sí mismo (`IF NOT EXISTS`, `ON CONFLICT DO NOTHING`, bloques `DO $$` que consultan `pg_constraint` antes de agregar un CHECK) y contiene, en este orden:
+- **Estado actual del repositorio:** el runner `npm run db:apply` y el esquema completo (identidad, tenants y locales, catálogo, biblioteca y playlists, pantallas, pedidos, roles y permisos) viven en un único script, `database/scripts/001_schema.sql`, que se reescribe en estado final mientras el proyecto está en desarrollo (la base se recrea desde cero). Debe ser idempotente por sí mismo (`IF NOT EXISTS`, `ON CONFLICT DO NOTHING`, bloques `DO $$` que consultan `pg_constraint` antes de agregar un CHECK) y contiene, en este orden:
   1. Tablas de identidad y acceso (`users`, `roles`, `users_roles`, `permissions`, `roles_permissions`).
   2. `tenants` y `stores` con `slug`, `last_order_number`, `whatsapp_number`, `created_at` y los CHECK de formato, reservadas y E.164 ya dentro del `CREATE TABLE`; `users_tenants` y `users_stores`.
-  3. `CREATE TABLE IF NOT EXISTS` de `categories`, `products`, `content_items`, `screens`, `orders`, `order_items`, con todas sus restricciones.
+  3. `CREATE TABLE IF NOT EXISTS` de `categories`, `products`, `media_items`, `playlists`, `playlist_items`, `screens`, `screen_playlists`, `orders`, `order_items`, con todas sus restricciones.
   4. `CREATE [UNIQUE] INDEX IF NOT EXISTS` de los índices de la sección 7.
   5. `COMMENT ON TABLE/COLUMN/INDEX` de las tablas, columnas importantes e índices (sin comentar las columnas obvias).
   6. Semillas de permisos y roles (ver `docs/api.md`, sección 12): `INSERT ... ON CONFLICT DO NOTHING` de los códigos de permiso (incluidos `tenants:*`), de los roles `root`, `owner` y `employee`, y de `roles_permissions` (`root` todos; `owner` todos salvo `tenants:*`; `employee` el subconjunto de lectura y órdenes).
@@ -341,7 +416,7 @@ Quedan para R2 y **no** se crean en `001_schema.sql`:
 - Regeneración de token de pantalla: `screens.token` se reemplaza; `screen_id` no cambia.
 - ~~Tenant suspendido con mensaje de mantenimiento (RF-035)~~: resuelto en R2 reutilizando `tenants.is_active` (`false` = suspendido); sin columna nueva ni script. El middleware responde 503 `TENANT_SUSPENDED`.
 - Panel root, métricas y despliegue productivo.
-- Playlists por pantalla (`screen_content`) e historial de estados (`order_status_history`), solo si el requerimiento lo exige.
+- Historial de estados (`order_status_history`), solo si el requerimiento lo exige.
 
 ## 10. Trazabilidad tabla a requerimiento
 
@@ -357,8 +432,9 @@ Requerimientos de R1: RF-001 a RF-007, RF-009 a RF-014, RF-018 a RF-034. En R2: 
 | `roles`, `permissions`, `roles_permissions` (existentes + semillas) | RF-007 |
 | `categories` | RF-010, RF-026 |
 | `products` | RF-011, RF-012, RF-013, RF-014, RF-026 |
-| `content_items` | RF-018, RF-019, RF-023 (la versión se calcula desde sus filas), RF-024 |
+| `media_items`, `playlists`, `playlist_items` | RF-018, RF-019, RF-023 (la versión se calcula desde sus filas), RF-024 |
 | `screens` | RF-020, RF-021, RF-022, RF-023, RF-025 |
+| `screen_playlists` | RF-019, RF-021, RF-023 (la versión incluye la agenda) |
 | `orders` | RF-025, RF-028, RF-029, RF-030, RF-031, RF-032 |
 | `order_items` | RF-027, RF-030, RF-034 |
 | Sin tabla propia | RF-027 (el carrito vive en el cliente; se valida al crear el pedido, ver `docs/api.md`), RF-034 (el mensaje se arma al crear el pedido y no se guarda) |

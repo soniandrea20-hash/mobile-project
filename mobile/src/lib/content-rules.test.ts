@@ -3,9 +3,8 @@ import {
   checkMedia,
   contentErrorMessage,
   contentSubtitle,
-  contentTitle,
+  itemsPayload,
   moveItem,
-  parseDuration,
   screenErrorMessage,
   validateScreenName,
 } from './content-rules';
@@ -31,16 +30,6 @@ describe('checkMedia', () => {
   });
 });
 
-describe('parseDuration', () => {
-  it('accepts integers from 3 to 60', () => {
-    expect(parseDuration('3')).toEqual({ seconds: 3 });
-    expect(parseDuration(' 60 ')).toEqual({ seconds: 60 });
-  });
-  it.each(['', '2', '61', '7.5', 'abc', '-5'])('rejects %j', (input) =>
-    expect(parseDuration(input)).toEqual({ error: 'Ingresá segundos enteros de 3 a 60.' }),
-  );
-});
-
 describe('moveItem', () => {
   const ids = ['a', 'b', 'c'];
   it('moves up and down returning the full list', () => {
@@ -57,13 +46,10 @@ describe('moveItem', () => {
 describe('row text', () => {
   const image = { type: 'image' as const, original_name: 'promo 2x1.jpg', duration_seconds: 10 };
   const video = { type: 'video' as const, original_name: 'combo.familiar.mp4', duration_seconds: 30 };
-  it('numbers the title from the file name without extension', () => {
-    expect(contentTitle(image, 0)).toBe('1 · promo 2x1');
-    expect(contentTitle(video, 2)).toBe('3 · combo.familiar');
-  });
-  it('shows kind and seconds', () => {
+  it('shows kind and seconds when there are any', () => {
     expect(contentSubtitle(image)).toBe('Imagen · 10 s');
     expect(contentSubtitle(video)).toBe('Video · 30 s');
+    expect(contentSubtitle({ type: 'image', original_name: 'a.jpg', duration_seconds: null })).toBe('Imagen');
   });
 });
 
@@ -73,8 +59,12 @@ describe('contentErrorMessage', () => {
     expect(contentErrorMessage(new ApiError(413, 'MEDIA_TOO_LARGE', 'x'))).toBe('El archivo supera el límite de tamaño.');
     expect(contentErrorMessage(new ApiError(415, 'UNSUPPORTED_MEDIA_TYPE', 'x'))).toBe('Elegí una imagen o un video MP4.');
     expect(contentErrorMessage(new ApiError(422, 'MEDIA_UNREADABLE', 'x'))).toBe('No se pudo leer el archivo. Probá con otro.');
-    expect(contentErrorMessage(new ApiError(422, 'CONTENT_LIST_MISMATCH', 'x'))).toBe('La lista cambió. Actualizamos el contenido.');
-    expect(contentErrorMessage(new ApiError(404, 'CONTENT_NOT_FOUND', 'x'))).toBe('El contenido ya no existe.');
+    expect(contentErrorMessage(new ApiError(409, 'MEDIA_IN_USE', 'x'))).toBe(
+      'Está en uso en una lista; quitalo de la lista primero.',
+    );
+    expect(contentErrorMessage(new ApiError(404, 'MEDIA_NOT_FOUND', 'x'))).toBe('El medio ya no existe.');
+    expect(contentErrorMessage(new ApiError(404, 'PLAYLIST_NOT_FOUND', 'x'))).toBe('La lista ya no existe.');
+    expect(contentErrorMessage(new ApiError(422, 'DURATION_REQUIRED', 'x'))).toBe('Cada imagen necesita su duración (3 a 60 s).');
     expect(contentErrorMessage(new ApiError(403, null, 'x'))).toBe('No tenés permiso para esta acción.');
     expect(contentErrorMessage(new ApiError(0, null, 'x'))).toBe('No se pudo conectar con el servidor.');
     expect(contentErrorMessage(new Error('x'))).toBe('No se pudo completar la acción.');
@@ -91,5 +81,16 @@ describe('screens', () => {
     expect(screenErrorMessage(new ApiError(403, null, 'x'))).toBe('No tenés permiso para esta acción.');
     expect(screenErrorMessage(new ApiError(0, null, 'x'))).toBe('No se pudo conectar con el servidor.');
     expect(screenErrorMessage(new Error('x'))).toBe('No se pudo crear la pantalla.');
+  });
+});
+
+describe('itemsPayload', () => {
+  it('sends the duration for images only', () => {
+    expect(
+      itemsPayload([
+        { media_id: 'a', type: 'image', duration_seconds: 8 },
+        { media_id: 'b', type: 'video', duration_seconds: 20 },
+      ]),
+    ).toEqual([{ media_id: 'a', duration_seconds: 8 }, { media_id: 'b' }]);
   });
 });

@@ -34,7 +34,7 @@ El tenant resuelto es el único `tenant_id` que usa cualquier consulta (ver aisl
 
 | Audiencia | Quién | Autenticación | Prefijo de rutas |
 | --- | --- | --- | --- |
-| Backoffice | Dueño y empleado, app Expo (Android y web) | `Authorization: Bearer <access_token>` (JWT del login existente) | `/me`, `/stores`, `/categories`, `/products`, `/content`, `/screens`, `/orders` |
+| Backoffice | Dueño y empleado, app Expo (Android y web) | `Authorization: Bearer <access_token>` (JWT del login existente) | `/me`, `/stores`, `/categories`, `/products`, `/content`, `/playlists`, `/screens`, `/orders` |
 | Administrador de la plataforma | Usuario con rol `root`, en `admin.{BASE_DOMAIN}` | `Authorization: Bearer <access_token>` | `/me`, `/tenants` (y `/auth/*` para entrar) |
 | Pantalla | Televisor con el reproductor `/screen/:token` | El token de la pantalla en la ruta; sin login | `/player/:token/...` |
 | Cliente público | Persona que escanea el QR | Anónimo; tenant por Host | `/public/...` y archivos en `/media/...` |
@@ -78,7 +78,7 @@ Códigos de error de R1: `TENANT_NOT_FOUND`, `NOT_A_MEMBER`, `STORE_NOT_FOUND`, 
 
 ### 1.6 Variables de entorno nuevas
 
-`BASE_DOMAIN`, `WEB_ORIGIN_TEMPLATE` (por ejemplo `https://{slug}.mostrador.io`; en desarrollo `http://{slug}.localhost:8081`), `UPLOADS_DIR`, `WHATSAPP_MAX_PART_CHARS` (1500), `PLAYER_POLL_SECONDS` (30), `DEFAULT_IMAGE_SECONDS` (10). Ya existen `JWT_SECRET`, `JWT_EXPIRE_SECONDS` y `DB_*`.
+`BASE_DOMAIN`, `WEB_ORIGIN_TEMPLATE` (por ejemplo `https://{slug}.mostrador.io`; en desarrollo `http://{slug}.localhost:8081`), `UPLOADS_DIR`, `WHATSAPP_MAX_PART_CHARS` (1500), `PLAYER_POLL_SECONDS` (30). Ya existen `JWT_SECRET`, `JWT_EXPIRE_SECONDS` y `DB_*`.
 
 ## 2. Autenticación existente (no se renombra)
 
@@ -337,63 +337,99 @@ Esquema `Product`:
 ### `DELETE /products/:productId/image`
 - Permiso: `products:update`. RF-012. Respuesta 200: `Product` con `image_url: null`. Errores: 404.
 
-## 7. Backoffice: contenido de pantalla (`/content`)
+## 7. Backoffice: biblioteca de medios y playlists (`/content`, `/playlists`)
 
-Esquema `ContentItem`:
+La biblioteca y las playlists son **del tenant**, no de un local: un medio se sube una vez y se reutiliza en muchas playlists, y una playlist se asigna a pantallas de cualquier local del tenant (sección 8). Todo se filtra por el `tenant_id` del contexto; un id de otro tenant responde 404.
+
+Esquema `Media`:
 
 ```json
-{ "content_id": "a1b2…", "store_id": "9d3e…", "type": "image", "url": "/media/c1a2…/content/55aa….jpg",
+{ "media_id": "a1b2…", "type": "image", "url": "/media/c1a2…/content/55aa….jpg",
   "original_name": "promo.jpg", "mime_type": "image/jpeg", "size_bytes": 1048576,
-  "duration_seconds": 10, "sort_order": 1, "is_visible": true, "created_at": "…", "updated_at": "…" }
+  "duration_seconds": null, "created_at": "…", "updated_at": "…" }
 ```
 
-`duration_seconds`: en imágenes, segundos en pantalla (3 a 60); en videos, duración real (1 a 60, solo lectura).
+`duration_seconds`: en videos, la duración real (1 a 60, la mide el backend); en imágenes es `null` porque su duración se define en cada item de playlist.
 
-### `GET /content?store_id=<uuid>`
-- Permiso: `content:read`. RF-018, RF-019. `store_id` obligatorio. Respuesta 200: arreglo de `ContentItem` ordenado por `sort_order`, incluye los ocultos. Errores: 404 `STORE_NOT_FOUND`.
+### `GET /content`
+- Permiso: `content:read`. RF-018. Respuesta 200: arreglo de `Media` del tenant, más recientes primero.
 
 ### `POST /content`
 - Permiso: `content:create`. RF-018, HU-12.
-- Request: `multipart/form-data`:
+- Request: `multipart/form-data` con un único campo `file`, obligatorio: imagen JPG, PNG o WebP hasta **5 MB**; video MP4 hasta **50 MB** (52 428 800 bytes) y **60 s** como máximo. El tipo se valida por el contenido real. No se procesa ni se redimensiona. La duración de un video la mide el backend con `ffprobe` y la redondea hacia arriba.
+- Respuesta **201**: `Media`.
+- Errores: 400 falta `file`; 413 `MEDIA_TOO_LARGE`; 415 `UNSUPPORTED_MEDIA_TYPE` (formato fuera de la lista, por ejemplo `.exe`); 422 `VIDEO_TOO_LONG` (más de 60 s), 422 `MEDIA_UNREADABLE` (no se pudo leer la duración o el archivo está corrupto).
 
-| Campo | Regla |
-| --- | --- |
-| `file` | obligatorio. Imagen JPG, PNG o WebP hasta **5 MB**; video MP4 hasta **50 MB** (52 428 800 bytes) y **60 s** como máximo. El tipo se valida por el contenido real. No se procesa ni se redimensiona |
-| `store_id` | UUID del local, obligatorio |
-| `duration_seconds` | opcional, solo para imágenes: entero de 3 a 60, por defecto `DEFAULT_IMAGE_SECONDS` (10). En un video no debe enviarse (422) |
+### `DELETE /content/:mediaId`
+- Permiso: `content:delete`. RF-018. Respuesta **204**; borra la fila y el archivo. Errores: 404 `MEDIA_NOT_FOUND`; **409 `MEDIA_IN_USE`** si algún item de playlist lo usa (hay que quitarlo de las playlists antes).
 
-- Se agrega al final de la playlist (`sort_order` = último + 1) y visible. La duración de un video la mide el backend con `ffprobe` y la redondea hacia arriba.
-- Respuesta **201**: `ContentItem`.
-- Errores: 400 falta `file` o `store_id`, o `duration_seconds` fuera de 3 a 60; 413 `MEDIA_TOO_LARGE`; 415 `UNSUPPORTED_MEDIA_TYPE` (formato fuera de la lista, por ejemplo `.exe`); 422 `VIDEO_TOO_LONG` (más de 60 s), 422 `MEDIA_UNREADABLE` (no se pudo leer la duración o el archivo está corrupto), 422 si se envía `duration_seconds` con un video; 404 `STORE_NOT_FOUND`.
-
-### `PATCH /content/:contentId`
-- Permiso: `content:update`. RF-019, HU-12.
-- Request (al menos uno):
+Esquemas de playlist:
 
 ```json
-{ "duration_seconds": 15, "is_visible": false }
+// Playlist
+{ "playlist_id": "f0e1…", "name": "Mañana", "item_count": 3, "created_at": "…", "updated_at": "…" }
+
+// PlaylistDetail = Playlist + items, en orden de reproducción
+{ "playlist_id": "f0e1…", "name": "Mañana", "item_count": 2, "created_at": "…", "updated_at": "…",
+  "items": [
+    { "playlist_item_id": "1a2b…", "media_id": "a1b2…", "type": "image", "url": "/media/…/55aa….jpg",
+      "original_name": "promo.jpg", "duration_seconds": 8 },
+    { "playlist_item_id": "3c4d…", "media_id": "c3d4…", "type": "video", "url": "/media/…/77bb….mp4",
+      "original_name": "spot.mp4", "duration_seconds": 30 }
+  ] }
 ```
 
-| Campo | Regla |
-| --- | --- |
-| `duration_seconds` | entero 3 a 60; solo imágenes (en un video, 422) |
-| `is_visible` | booleano; `false` oculta el contenido sin borrarlo |
+`duration_seconds` de un item es la duración **efectiva**: la propia del item en imágenes, la real del medio en videos.
 
-- Respuesta 200: `ContentItem`. Errores: 400 duración fuera de rango (`message` indica el mínimo de 3 s); 404; 422 duración en un video.
+### `GET /playlists`
+- Permiso: `content:read`. Respuesta 200: arreglo de `Playlist` del tenant ordenado por nombre.
 
-### `PUT /content/order`
-- Permiso: `content:update`. RF-019, HU-12. Fija el orden completo de la playlist de un local.
+### `POST /playlists`
+- Permiso: `content:create`. Request `{ "name": "Mañana" }` (texto 1 a 80, se recortan los espacios; no es único). Respuesta **201**: `Playlist` con `item_count` 0. Errores: 400 nombre vacío o de más de 80.
+
+### `GET /playlists/:playlistId`
+- Permiso: `content:read`. Respuesta 200: `PlaylistDetail`. Errores: 404 `PLAYLIST_NOT_FOUND`.
+
+### `PATCH /playlists/:playlistId`
+- Permiso: `content:update`. Request `{ "name": "…" }` (mismas reglas). Respuesta 200: `Playlist`. Errores: 400; 404 `PLAYLIST_NOT_FOUND`.
+
+### `DELETE /playlists/:playlistId`
+- Permiso: `content:delete`. Respuesta **204**. Borra sus items y **sus asignaciones a pantallas** (`ON DELETE CASCADE`); los medios quedan en la biblioteca. Errores: 404 `PLAYLIST_NOT_FOUND`.
+
+### `PUT /playlists/:playlistId/items`
+- Permiso: `content:update`. Reemplaza la lista completa, en una transacción; el orden del arreglo es el orden de reproducción (posiciones 1, 2, 3…).
 - Request:
 
 ```json
-{ "store_id": "9d3e…", "content_ids": ["a1b2…", "c3d4…", "e5f6…"] }
+{ "items": [
+  { "media_id": "a1b2…", "duration_seconds": 8 },
+  { "media_id": "c3d4…" },
+  { "media_id": "a1b2…", "duration_seconds": 20 }
+] }
 ```
 
-`content_ids` debe contener **todos** los contenidos del local (también los ocultos) exactamente una vez; el backend asigna `sort_order` 1, 2, 3... en ese orden, en una transacción.
-- Respuesta 200: arreglo de `ContentItem` en el nuevo orden. Errores: 400 si la lista está vacía o tiene repetidos; 404 `STORE_NOT_FOUND`; 422 si falta o sobra algún contenido del local.
+| Campo | Regla |
+| --- | --- |
+| `items` | arreglo de 0 a 100; `[]` vacía la playlist. El mismo medio puede repetirse con duraciones distintas |
+| `media_id` | UUID de un medio del tenant |
+| `duration_seconds` | entero 3 a 60. **Obligatorio en imágenes; no debe enviarse en videos** (usan su duración real) |
 
-### `DELETE /content/:contentId`
-- Permiso: `content:delete`. RF-018. Respuesta **204**. Borra el archivo y deja el orden de los restantes consecutivo. Errores: 404.
+- Respuesta 200: `PlaylistDetail`.
+- Errores: 400 duración fuera de 3 a 60, más de 100 items o `media_id` no UUID; 404 `PLAYLIST_NOT_FOUND`; 404 `MEDIA_NOT_FOUND` (algún medio no es del tenant); 422 `DURATION_REQUIRED` (imagen sin duración); 422 `DURATION_NOT_ALLOWED` (video con duración).
+
+### `GET /playlists/:playlistId/screens`
+- Permiso: `content:read`. Sección "Pantallas" del editor: dónde se usa la playlist. Respuesta 200, una entrada por asignación y de **cualquier local** del tenant:
+
+```json
+[
+  { "screen_id": "d4e5…", "screen_name": "Entrada", "store_id": "9d3e…", "store_name": "Palermo",
+    "days": null, "start": null, "end": null },
+  { "screen_id": "a7b8…", "screen_name": "Barra", "store_id": "5f6a…", "store_name": "Centro",
+    "days": 31, "start": "08:00", "end": "12:30" }
+]
+```
+
+`days`, `start` y `end` en `null` indican que es la playlist **por defecto** de esa pantalla; en una franja, `days` es la máscara de días (lunes=1 … domingo=64) y `start`/`end` van en `HH:MM`. Para asignar o quitar se usa `PUT /screens/:screenId/schedule` (sección 8). Errores: 404 `PLAYLIST_NOT_FOUND`.
 
 ## 8. Backoffice: pantallas (`/screens`)
 
@@ -423,6 +459,53 @@ Esquema `Screen`:
 
 ### `PATCH /screens/:screenId`
 - Permiso: `screens:update`. RF-020. Body: `name` y/o `is_active`. `is_active: false` hace que el reproductor reciba 404 (acceso revocado). No hay borrado en R1 para conservar el origen de los pedidos. Respuesta 200: `Screen`. Errores: 404.
+
+### Agenda de la pantalla: playlist por defecto y franjas
+
+Cada pantalla tiene **como máximo una playlist por defecto** y **cero o más franjas semanales**. La playlist y la pantalla deben ser del mismo tenant, pero pueden ser de **cualquier local** del tenant. Fuera de toda franja se reproduce la playlist por defecto; si no hay por defecto ni franja activa, la pantalla no reproduce nada. No hay prioridades: las franjas de una misma pantalla **no pueden solaparse**.
+
+Una franja es `{ "playlist_id", "days", "start", "end" }`:
+
+| Campo | Regla |
+| --- | --- |
+| `days` | máscara de bits de los días: lunes=1, martes=2, miércoles=4, jueves=8, viernes=16, sábado=32, domingo=64 (entero 1 a 127; de lunes a viernes = 31, fin de semana = 96) |
+| `start`, `end` | `HH:MM` de 24 h, en la **hora local de la pantalla** (el reproductor usa su propio reloj; no hay zona horaria del local). `end` debe ser posterior a `start`: una franja **no cruza la medianoche** y el fin es exclusivo |
+
+Dos franjas se solapan si comparten algún día **y** sus intervalos `[start, end)` se cruzan; dos franjas contiguas (una termina a las 12:00 y la otra empieza a las 12:00) no se solapan.
+
+### `GET /screens/:screenId/schedule`
+- Permiso: `screens:read`. Respuesta 200:
+
+```json
+{
+  "default_playlist_id": "f0e1…",
+  "slots": [
+    { "playlist_id": "a7b8…", "playlist_name": "Desayuno", "days": 31, "start": "08:00", "end": "12:00" },
+    { "playlist_id": "c9d0…", "playlist_name": "Fin de semana", "days": 96, "start": "10:00", "end": "14:00" }
+  ]
+}
+```
+
+`default_playlist_id` es `null` si no hay por defecto. Las franjas vienen ordenadas por hora de inicio y días. Errores: 404 `SCREEN_NOT_FOUND`.
+
+### `PUT /screens/:screenId/schedule`
+- Permiso: `screens:update`. Reemplaza la agenda completa (por defecto y franjas) en una transacción; `{ "slots": [] }` quita todo.
+- Request:
+
+```json
+{
+  "default_playlist_id": "f0e1…",
+  "slots": [
+    { "playlist_id": "a7b8…", "days": 31, "start": "08:00", "end": "12:00" },
+    { "playlist_id": "c9d0…", "days": 96, "start": "10:00", "end": "14:00" }
+  ]
+}
+```
+
+`default_playlist_id` es opcional o `null` (sin por defecto); `slots` es obligatorio (0 a 50). La misma playlist puede usarse en varias franjas.
+- Respuesta 200: la agenda guardada, con la forma del `GET`.
+- Errores: 400 `days` fuera de 1 a 127, hora que no sea `HH:MM`, UUID inválido o más de 50 franjas; 404 `SCREEN_NOT_FOUND`; 404 `PLAYLIST_NOT_FOUND` (alguna playlist no es del tenant; no se guarda nada); 422 `INVALID_SLOT` (`end` no posterior a `start`); 422 `SLOT_OVERLAP` con `details: { "slots": [i, j] }`, los índices de las dos franjas del request que se solapan.
+- Para asignar una playlist a una pantalla de otro local se usa este mismo endpoint con el `screenId` de esa pantalla; la sección "Pantallas" del editor de playlist lee `GET /playlists/:playlistId/screens` (sección 7) y escribe con este `PUT`.
 
 ## 9. Backoffice: órdenes (`/orders`)
 
@@ -510,22 +593,29 @@ Audiencia: televisor. Sin login. El reproductor web vive en la ruta `/screen/:to
   "poll_interval_seconds": 30,
   "store": { "name": "Palermo", "slug": "palermo" },
   "qr_url": "https://local1.mostrador.io/palermo?src=d4e5…",
-  "items": [
-    { "content_id": "a1b2…", "type": "image", "url": "/media/c1a2…/content/55aa….jpg", "duration_seconds": 10 },
-    { "content_id": "c3d4…", "type": "video", "url": "/media/c1a2…/content/66bb….mp4", "duration_seconds": 42 }
+  "default": {
+    "items": [
+      { "media_id": "a1b2…", "type": "image", "url": "/media/c1a2…/content/55aa….jpg", "duration_seconds": 10 },
+      { "media_id": "c3d4…", "type": "video", "url": "/media/c1a2…/content/66bb….mp4", "duration_seconds": 42 }
+    ]
+  },
+  "slots": [
+    { "days": 31, "start": "08:00", "end": "12:00",
+      "items": [ { "media_id": "a1b2…", "type": "image", "url": "/media/c1a2…/content/55aa….jpg", "duration_seconds": 5 } ] }
   ]
 }
 ```
 
 - Respuesta **304** sin cuerpo si `If-None-Match` coincide con la versión actual.
-- `items` incluye solo los contenidos con `is_visible = true`, en orden de `sort_order`. Puede ser `[]`: el reproductor muestra una imagen por defecto con el QR visible.
+- `default` es la playlist por defecto de la pantalla (`null` si no tiene) y `slots` son **todas** sus franjas, cada una con los `items` de su playlist (puede ser `[]`). El backend **no elige** la franja activa: el reproductor lo hace con su propio reloj local (día de la semana y hora, `days` como máscara de bits y `[start, end)`), para que siga funcionando sin red con la última respuesta guardada. Fuera de toda franja usa `default`; sin `default` ni franja activa no reproduce nada y muestra la imagen por defecto con el QR visible.
+- Cada item es `{ media_id, type, url, duration_seconds }`; `duration_seconds` es la del item de playlist en imágenes y la real del medio en videos. Los items vienen en el orden de la playlist; las franjas, por hora de inicio y días.
 - `qr_url` = origen web del tenant + `/` + slug del local + `?src=` + `screen_id`. Es el origen que queda guardado en el pedido (RF-022, RF-025). La legibilidad del QR a distancia (RNF-009: lectura a 1,5 m en al menos 95% de 20 intentos y lado del QR de al menos 8% del alto de la pantalla) es responsabilidad del reproductor; el API solo entrega `qr_url`.
-- **Detección de cambios (RF-023):** `version` es los primeros 16 caracteres hexadecimales del SHA-256 del JSON de la respuesta sin el campo `version`, con las claves en el orden mostrado. Cambia al agregar, borrar, ocultar, reordenar o cambiar la duración de un contenido, o al cambiar el nombre o slug del local. `ETag` es esa misma versión entre comillas.
+- **Detección de cambios (RF-023):** `version` es los primeros 16 caracteres hexadecimales del SHA-256 del JSON de la respuesta sin el campo `version`, con las claves en el orden mostrado. Cambia al cambiar la playlist por defecto, una franja (playlist, días u horas) o los items de cualquiera de ellas (agregar, quitar, reordenar o cambiar una duración), o al cambiar el nombre o slug del local. `ETag` es esa misma versión entre comillas.
 - **Contrato de polling del reproductor:**
-  1. Al abrir pide la playlist y descarga todos los `url` de `items`.
+  1. Al abrir pide la playlist y descarga todos los `url` de `default` y de todas las franjas.
   2. Cada `poll_interval_seconds` (30 s) vuelve a pedirla con `If-None-Match: "<version>"`.
-  3. Con 304 no hace nada. Con 200 descarga solo los archivos que no tiene en caché y aplica la nueva playlist al terminar el elemento en curso, sin recargar la página.
-  4. Si la solicitud falla (sin red, 5xx) sigue reproduciendo la última playlist y reintenta en el siguiente ciclo; al volver la red sincroniza sin reiniciar la reproducción (RF-024, RNF-010).
+  3. Con 304 no hace nada. Con 200 descarga solo los archivos que no tiene en caché y aplica la nueva respuesta al terminar el elemento en curso, sin recargar la página.
+  4. Si la solicitud falla (sin red, 5xx) sigue reproduciendo la última respuesta y reintenta en el siguiente ciclo; al volver la red sincroniza sin reiniciar la reproducción (RF-024, RNF-010). El cambio de franja ocurre por el reloj local, no necesita red.
   5. Sin red y sin caché desde el inicio: muestra un mensaje de espera y reintenta cada ciclo.
   6. Con 404 muestra "pantalla no válida" (token inexistente, pantalla desactivada).
 - Los archivos de `/media/...` tienen `Cache-Control: public, max-age=31536000, immutable` (el nombre es un UUID que nunca cambia), por lo que el navegador y el Service Worker pueden cachearlos.
@@ -661,13 +751,13 @@ Estilo de código existente: `recurso:acción` (por ejemplo `products:create`, c
 | `products:create` | `POST /products` | sí | no |
 | `products:update` | `PATCH /products/:id`, `PUT` y `DELETE /products/:id/image` | sí | no |
 | `products:delete` | `DELETE /products/:id` | sí | no |
-| `content:read` | `GET /content` | sí | no |
-| `content:create` | `POST /content` | sí | no |
-| `content:update` | `PATCH /content/:id`, `PUT /content/order` | sí | no |
-| `content:delete` | `DELETE /content/:id` | sí | no |
-| `screens:read` | `GET /screens` | sí | no |
+| `content:read` | `GET /content`, `GET /playlists`, `GET /playlists/:id`, `GET /playlists/:id/screens` | sí | no |
+| `content:create` | `POST /content`, `POST /playlists` | sí | no |
+| `content:update` | `PATCH /playlists/:id`, `PUT /playlists/:id/items` | sí | no |
+| `content:delete` | `DELETE /content/:id`, `DELETE /playlists/:id` | sí | no |
+| `screens:read` | `GET /screens`, `GET /screens/:id/schedule` | sí | no |
 | `screens:create` | `POST /screens` | sí | no |
-| `screens:update` | `PATCH /screens/:id` | sí | no |
+| `screens:update` | `PATCH /screens/:id`, `PUT /screens/:id/schedule` (asignar playlists a la pantalla) | sí | no |
 | `orders:read` | `GET /orders`, `GET /orders/:id` | sí | sí |
 | `orders:update` | `PATCH /orders/:id/status` | sí | sí |
 | `tenants:read` | `GET /tenants` | no | no |
@@ -684,11 +774,11 @@ Estilo de código existente: `recurso:acción` (por ejemplo `products:create`, c
 | Audiencia | Endpoints | Rutas |
 | --- | --- | --- |
 | Autenticación existente | 2 | `POST /auth/register`, `POST /auth/login` |
-| Backoffice (JWT) | 26 | `/me` 1; `/stores` 3; `/categories` 4; `/products` 7; `/content` 5; `/screens` 3; `/orders` 3 |
+| Backoffice (JWT) | 33 | `/me` 1; `/stores` 3; `/categories` 4; `/products` 7; `/content` 3; `/playlists` 7; `/screens` 5; `/orders` 3 |
 | Administrador de la plataforma (JWT `root`) | 3 | `/tenants` 3 (sección 3.1) |
 | Pantalla (token) | 1 | `GET /player/:token/playlist` |
 | Cliente público (anónimo) | 3 | `GET /public/stores/:storeSlug/catalog`, `POST /public/stores/:storeSlug/orders`, `GET /media/*` |
-| **Total R1** | **35** | |
+| **Total R1** | **42** | |
 
 Trazabilidad RF a endpoint o tabla (los RF de R2 están en la sección 14):
 
@@ -701,8 +791,8 @@ Trazabilidad RF a endpoint o tabla (los RF de R2 están en la sección 14):
 | RF-010 | `/categories` |
 | RF-011, RF-012, RF-013 | `/products`, imagen del producto |
 | RF-014 | `GET /public/stores/:storeSlug/catalog` |
-| RF-018, RF-019 | `/content` |
-| RF-020 | `/screens` |
+| RF-018, RF-019 | `/content` (biblioteca) y `/playlists` (orden y duraciones) |
+| RF-020 | `/screens` (incluye la agenda `/screens/:id/schedule`) |
 | RF-021, RF-022, RF-023, RF-024 | `GET /player/:token/playlist` y `/media/*` |
 | RF-025, RF-026 | catálogo público y `qr_url` |
 | RF-027, RF-028, RF-029 | `POST /public/stores/:storeSlug/orders` (el carrito vive en el cliente; los límites se validan al crear el pedido) |

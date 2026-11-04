@@ -1,4 +1,4 @@
-/* Schema de Mostrador: estado final completo (identidad, tenants y locales, catalogo, playlist, pantallas, pedidos, roles y permisos). Idempotente. Ver docs/modelo-datos.md */
+/* Schema de Mostrador: estado final completo (identidad, tenants y locales, catalogo, biblioteca y playlists, pantallas, pedidos, roles y permisos). Idempotente. Ver docs/modelo-datos.md */
 
 -- identidad y acceso
 
@@ -122,27 +122,8 @@ create table if not exists products (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-create table if not exists content_items (
-    content_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id UUID NOT NULL REFERENCES tenants(tenant_id),
-    store_id UUID NOT NULL REFERENCES stores(store_id),
-    type VARCHAR(10) NOT NULL CHECK (type IN ('image', 'video')),
-    file_path VARCHAR(255) NOT NULL,
-    original_name VARCHAR(255) NOT NULL,
-    mime_type VARCHAR(50) NOT NULL CHECK (mime_type IN ('image/jpeg', 'image/png', 'image/webp', 'video/mp4')),
-    size_bytes BIGINT NOT NULL CHECK (
-        size_bytes > 0
-        AND ((type = 'image' AND size_bytes <= 5242880) OR (type = 'video' AND size_bytes <= 52428800))
-    ),
-    duration_seconds SMALLINT NOT NULL CHECK (
-        (type = 'image' AND duration_seconds BETWEEN 3 AND 60)
-        OR (type = 'video' AND duration_seconds BETWEEN 1 AND 60)
-    ),
-    sort_order INTEGER NOT NULL,
-    is_visible BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
+-- la biblioteca por local se reemplaza por media_items y playlists por tenant (datos de desarrollo descartados)
+drop table if exists content_items;
 
 create table if not exists screens (
     screen_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -155,6 +136,55 @@ create table if not exists screens (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT uq_screens_token UNIQUE (token)
+);
+
+create table if not exists media_items (
+    media_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id UUID NOT NULL REFERENCES tenants(tenant_id),
+    type VARCHAR(10) NOT NULL CHECK (type IN ('image', 'video')),
+    file_path VARCHAR(255) NOT NULL,
+    original_name VARCHAR(255) NOT NULL,
+    mime_type VARCHAR(50) NOT NULL CHECK (mime_type IN ('image/jpeg', 'image/png', 'image/webp', 'video/mp4')),
+    size_bytes BIGINT NOT NULL CHECK (
+        size_bytes > 0
+        AND ((type = 'image' AND size_bytes <= 5242880) OR (type = 'video' AND size_bytes <= 52428800))
+    ),
+    duration_seconds SMALLINT CHECK (
+        (type = 'image' AND duration_seconds IS NULL)
+        OR (type = 'video' AND duration_seconds BETWEEN 1 AND 60)
+    ),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+create table if not exists playlists (
+    playlist_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id UUID NOT NULL REFERENCES tenants(tenant_id),
+    name VARCHAR(80) NOT NULL CHECK (length(btrim(name)) >= 1),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+create table if not exists playlist_items (
+    playlist_item_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    playlist_id UUID NOT NULL REFERENCES playlists(playlist_id) ON DELETE CASCADE,
+    media_id UUID NOT NULL REFERENCES media_items(media_id) ON DELETE RESTRICT,
+    position INTEGER NOT NULL CHECK (position >= 1),
+    duration_seconds SMALLINT CHECK (duration_seconds BETWEEN 3 AND 60)
+);
+
+create table if not exists screen_playlists (
+    screen_playlist_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    screen_id UUID NOT NULL REFERENCES screens(screen_id) ON DELETE CASCADE,
+    playlist_id UUID NOT NULL REFERENCES playlists(playlist_id) ON DELETE CASCADE,
+    days SMALLINT,
+    start_time TIME,
+    end_time TIME,
+
+    CONSTRAINT ck_screen_playlists_schedule CHECK (
+        (days IS NULL AND start_time IS NULL AND end_time IS NULL)
+        OR (days BETWEEN 1 AND 127 AND start_time IS NOT NULL AND end_time IS NOT NULL AND end_time > start_time)
+    )
 );
 
 create table if not exists orders (
@@ -196,7 +226,13 @@ create unique index if not exists uq_stores_tenant_slug on stores (tenant_id, sl
 create unique index if not exists uq_categories_store_name on categories (store_id, lower(name));
 create index if not exists ix_products_store_available on products (store_id, is_available);
 create index if not exists ix_products_category on products (category_id);
-create index if not exists ix_content_items_store_order on content_items (store_id, sort_order);
+create index if not exists ix_media_items_tenant_created on media_items (tenant_id, created_at desc);
+create index if not exists ix_playlists_tenant_name on playlists (tenant_id, lower(name));
+create unique index if not exists uq_playlist_items_position on playlist_items (playlist_id, position);
+create index if not exists ix_playlist_items_media on playlist_items (media_id);
+create unique index if not exists uq_screen_playlists_default on screen_playlists (screen_id) where days is null;
+create index if not exists ix_screen_playlists_screen on screen_playlists (screen_id);
+create index if not exists ix_screen_playlists_playlist on screen_playlists (playlist_id);
 create index if not exists ix_orders_store_created on orders (tenant_id, store_id, created_at desc);
 create index if not exists ix_orders_store_status_created on orders (tenant_id, store_id, status, created_at desc);
 
@@ -204,7 +240,10 @@ create index if not exists ix_orders_store_status_created on orders (tenant_id, 
 
 comment on table categories is 'Categorias del catalogo de un local';
 comment on table products is 'Productos del catalogo de un local; el precio vigente es la unica fuente de precio al crear un pedido';
-comment on table content_items is 'Imagenes y videos de la playlist de un local, reproducida por todas sus pantallas';
+comment on table media_items is 'Biblioteca de imagenes y videos del tenant; se sube una vez y se reutiliza en muchas playlists';
+comment on table playlists is 'Lista ordenada y reutilizable de medios del tenant; se asigna a pantallas de cualquier local';
+comment on table playlist_items is 'Medios de una playlist en orden; el mismo medio puede aparecer varias veces';
+comment on table screen_playlists is 'Asignacion de una playlist a una pantalla: por defecto (days NULL) o en una franja semanal';
 comment on table screens is 'Pantallas de un local; el token es su credencial y el screen_id identifica el origen de los pedidos';
 comment on table orders is 'Pedidos recibidos por un local, con numero publico consecutivo por tenant';
 comment on table order_items is 'Lineas de un pedido, con snapshot de nombre y precio del producto';
@@ -229,15 +268,24 @@ comment on column products.image_path is 'Ruta relativa dentro de UPLOADS_DIR; N
 comment on column products.is_available is 'FALSE oculta el producto del catalogo publico y bloquea su alta en pedidos';
 comment on column products.sort_order is 'Orden dentro de la categoria; el empate se resuelve por name';
 
-comment on column content_items.type is 'Decide como lo reproduce el player: image o video';
-comment on column content_items.file_path is 'Ruta relativa dentro de UPLOADS_DIR con nombre UUID: la URL no se adivina y nunca cambia, por lo que el player puede cachearla';
-comment on column content_items.original_name is 'Nombre que subio el usuario; solo se muestra en el backoffice';
-comment on column content_items.mime_type is 'Tipo validado por el contenido real del archivo, no por el encabezado del cliente';
-comment on column content_items.size_bytes is 'Respaldo en base de los limites de 5 MB para imagenes y 50 MB para videos';
-comment on column content_items.duration_seconds is 'Imagen: segundos en pantalla (3 a 60). Video: duracion real medida al subir, redondeada hacia arriba (1 a 60)';
-comment on column content_items.sort_order is 'Posicion en la playlist; la API lo deja consecutivo (1, 2, 3...) y al subir se agrega al final';
-comment on column content_items.is_visible is 'Permite ocultar un contenido sin borrarlo';
-comment on column content_items.updated_at is 'Entra en el calculo de la version de la playlist';
+comment on column media_items.type is 'Decide como lo reproduce el player: image o video';
+comment on column media_items.file_path is 'Ruta relativa dentro de UPLOADS_DIR con nombre UUID: la URL no se adivina y nunca cambia, por lo que el player puede cachearla';
+comment on column media_items.original_name is 'Nombre que subio el usuario; solo se muestra en el backoffice';
+comment on column media_items.mime_type is 'Tipo validado por el contenido real del archivo, no por el encabezado del cliente';
+comment on column media_items.size_bytes is 'Respaldo en base de los limites de 5 MB para imagenes y 50 MB para videos';
+comment on column media_items.duration_seconds is 'Video: duracion real medida al subir, redondeada hacia arriba (1 a 60). Imagen: NULL, su duracion se define en cada item de playlist';
+
+comment on column playlists.name is 'Nombre visible en el backoffice; no es unico';
+
+comment on column playlist_items.playlist_id is 'ON DELETE CASCADE: al borrar la playlist se borran sus items';
+comment on column playlist_items.media_id is 'ON DELETE RESTRICT implementa que no se borra un medio que esta en uso en una playlist';
+comment on column playlist_items.position is 'Posicion en la playlist (1, 2, 3...); la API reemplaza la lista completa y la deja consecutiva';
+comment on column playlist_items.duration_seconds is 'Imagen: segundos en pantalla (3 a 60), distinto en cada item. Video: NULL, se usa la duracion real del medio; lo valida la aplicacion';
+
+comment on column screen_playlists.playlist_id is 'ON DELETE CASCADE: al borrar la playlist se quitan sus asignaciones; la playlist debe ser del mismo tenant que la pantalla (lo valida la aplicacion)';
+comment on column screen_playlists.days is 'Dias de la franja como mascara de bits (lunes=1, martes=2, ... domingo=64); NULL significa playlist por defecto de la pantalla';
+comment on column screen_playlists.start_time is 'Inicio de la franja en hora local de la pantalla; NULL en la playlist por defecto. La franja no cruza la medianoche';
+comment on column screen_playlists.end_time is 'Fin exclusivo de la franja; siempre mayor que start_time. NULL en la playlist por defecto';
 
 comment on column screens.screen_id is 'Identifica el origen del pedido y viaja en el QR (?src=); no es secreto';
 comment on column screens.token is 'Credencial de la pantalla: 32 bytes aleatorios en base64url, va en la URL /screen/:token. Se guarda en claro para poder mostrar de nuevo la URL en el backoffice';
@@ -268,7 +316,13 @@ comment on index uq_stores_tenant_slug is 'Resuelve el local por su slug dentro 
 comment on index uq_categories_store_name is 'Impone nombre de categoria unico por local sin distinguir mayusculas y sirve el listado de categorias de un local';
 comment on index ix_products_store_available is 'Consulta caliente del catalogo publico: productos disponibles de un local; tambien sirve el listado del backoffice por local';
 comment on index ix_products_category is 'Hace barata la comprobacion RESTRICT al borrar una categoria y el filtro por categoria';
-comment on index ix_content_items_store_order is 'Camino caliente: cada pantalla consulta la playlist ordenada de su local cada 30 segundos';
+comment on index ix_media_items_tenant_created is 'Listado de la biblioteca del tenant, mas recientes primero';
+comment on index ix_playlists_tenant_name is 'Listado de playlists del tenant ordenado por nombre sin distinguir mayusculas';
+comment on index uq_playlist_items_position is 'Impide posiciones repetidas en una playlist y sirve la lectura de sus items en orden, camino caliente del player';
+comment on index ix_playlist_items_media is 'Hace barata la comprobacion RESTRICT al borrar un medio y la busqueda de playlists que lo usan';
+comment on index uq_screen_playlists_default is 'Garantiza como maximo una playlist por defecto por pantalla (parcial: solo filas con days NULL)';
+comment on index ix_screen_playlists_screen is 'Camino caliente: cada pantalla lee su por defecto y sus franjas cada 30 segundos, y el backoffice las edita';
+comment on index ix_screen_playlists_playlist is 'Seccion Pantallas del editor de playlist y hace barata la FK al borrar una playlist';
 comment on index uq_screens_token is 'Garantiza tokens unicos y sirve la busqueda por token de cada consulta del player';
 comment on index uq_orders_tenant_number is 'Impide numeros de pedido repetidos dentro del tenant y permite buscar un pedido por su numero';
 comment on index ix_orders_store_created is 'Listado del backoffice, mas recientes primero, por local y rango de fechas';
@@ -304,13 +358,13 @@ insert into permissions (code, description) values
     ('products:create', 'Crear productos'),
     ('products:update', 'Editar productos e imagenes'),
     ('products:delete', 'Eliminar productos'),
-    ('content:read', 'Ver contenido de pantalla'),
-    ('content:create', 'Subir contenido de pantalla'),
-    ('content:update', 'Editar y ordenar contenido de pantalla'),
-    ('content:delete', 'Eliminar contenido de pantalla'),
+    ('content:read', 'Ver biblioteca de medios y playlists'),
+    ('content:create', 'Subir medios y crear playlists'),
+    ('content:update', 'Editar playlists y sus items'),
+    ('content:delete', 'Eliminar medios y playlists'),
     ('screens:read', 'Ver pantallas'),
     ('screens:create', 'Crear pantallas'),
-    ('screens:update', 'Editar pantallas'),
+    ('screens:update', 'Editar pantallas y asignarles playlists'),
     ('orders:read', 'Ver ordenes'),
     ('orders:update', 'Cambiar el estado de las ordenes')
 on conflict (code) do nothing;

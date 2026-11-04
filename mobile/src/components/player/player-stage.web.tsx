@@ -98,8 +98,7 @@ function Progress({ count, active }: { count: number; active: number }) {
   );
 }
 
-export function PlayerStage({ playlist, index, cycle, qrUrl, onDone }: PlayerStageProps) {
-  const { items, store } = playlist;
+export function PlayerStage({ items, storeName, index, cycle, qrUrl, onDone }: PlayerStageProps) {
   const active = clampIndex(index, items.length);
   const item = items[active];
 
@@ -115,7 +114,7 @@ export function PlayerStage({ playlist, index, cycle, qrUrl, onDone }: PlayerSta
       }}
     >
       {item ? (
-        <Media key={`${cycle}-${item.content_id}`} item={item} onDone={onDone} />
+        <Media key={`${cycle}-${item.media_id}`} item={item} onDone={onDone} />
       ) : (
         // Default panel for a screen without content.
         <div
@@ -130,7 +129,7 @@ export function PlayerStage({ playlist, index, cycle, qrUrl, onDone }: PlayerSta
             fontSize: '9vh',
           }}
         >
-          {store.name}
+          {storeName}
         </div>
       )}
       <Preload item={items[nextIndex(active, items.length)]} />

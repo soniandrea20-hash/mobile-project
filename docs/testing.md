@@ -222,13 +222,13 @@ Los casos de estrés usan, salvo que se indique "meta propuesta", las metas de `
 | TC-049 | HU-11 | RF-017 | Confirmar con precio corregido | Lista de detectados | precio 1200 corregido a 1500,00 | 1. Corregir el precio<br>2. Confirmar | Se guardan los productos con el precio corregido | Funcional feliz | Alta | Sí (Maestro) |
 | TC-050 | HU-11 | RF-017 | Descartar ítems | Lista de detectados | descartar 2 de 10 | 1. Descartar dos ítems<br>2. Confirmar | Se guardan 8 productos; los descartados no | Funcional feliz | Media | Sí (Maestro) |
 | TC-051 | HU-11 | RF-017 | Salir sin confirmar | Lista de detectados | 10 detectados | 1. Salir de la pantalla sin confirmar | No se guarda ningún producto | Negativa | Media | Sí (Maestro) |
-| TC-052 | HU-12 | RF-018 | Subir imagen de contenido | Contenido de pantalla abierto | PNG de 1 MB | 1. Subir la imagen | Queda al final de la lista de reproducción | Funcional feliz | Alta | Sí (supertest) |
+| TC-052 | HU-12 | RF-018 | Subir imagen de contenido | Contenido de pantalla abierto | PNG de 1 MB | 1. Subir la imagen | Queda en la biblioteca del tenant, lista para usarse en una playlist | Funcional feliz | Alta | Sí (supertest) |
 | TC-053 | HU-12 | RF-018 | Formato no soportado | Contenido de pantalla abierto | archivo .exe | 1. Subir el archivo | Rechazado indicando los formatos permitidos | Negativa | Alta | Sí (supertest) |
 | TC-054 | HU-12 | RF-018, RNF-005 | Video de 80 MB | Contenido de pantalla abierto | video de 80 MB | 1. Subir el video | 413 indicando el límite de 50 MB | Negativa | Alta | Sí (supertest) |
 | TC-055 | HU-12 | RF-018, RNF-005 | Video en el límite de tamaño y duración | Contenido de pantalla abierto | video de 50 MB y 60 s | 1. Subir el video | Aceptado | Límite | Media | Sí (supertest) |
 | TC-056 | HU-12 | RF-018, RNF-005 | Video de 61 segundos | Contenido de pantalla abierto | video de 61 s y menos de 50 MB | 1. Subir el video | Rechazado por duración | Límite | Media | Sí (supertest) |
-| TC-057 | HU-12 | RF-019 | Duración mínima de una imagen | Imagen en la lista | duración 2 s y 3 s | 1. Fijar 2 s<br>2. Fijar 3 s | 2 s rechazado (mínimo 3 s); 3 s aceptado | Límite | Alta | Sí (Jest) |
-| TC-058 | HU-12 | RF-019 | Reordenar contenidos | Dos contenidos en la lista | orden A, B a B, A | 1. Cambiar el orden<br>2. Abrir el reproductor | El reproductor muestra B y luego A | Funcional feliz | Alta | Sí (Playwright) |
+| TC-057 | HU-12 | RF-019 | Duración mínima de una imagen | Imagen en una playlist (duración del item) | duración 2 s y 3 s | 1. Fijar 2 s<br>2. Fijar 3 s | 2 s rechazado (mínimo 3 s); 3 s aceptado | Límite | Alta | Sí (Jest) |
+| TC-058 | HU-12 | RF-019 | Reordenar items de una playlist | Dos items en una playlist asignada a la pantalla | orden A, B a B, A | 1. Cambiar el orden (`PUT /playlists/:id/items`)<br>2. Abrir el reproductor | El reproductor muestra B y luego A | Funcional feliz | Alta | Sí (Playwright) |
 | TC-059 | HU-13 | RF-020 | Crear pantalla y obtener URL | Sesión del dueño | pantalla "Entrada" | 1. Registrar la pantalla | URL /screen/<token> única; la URL abre el reproductor. Jest: `screens.use-cases.spec.ts` cubre token de 43 caracteres, `player_url` y unicidad entre altas; que la URL abra el reproductor queda para el reproductor | Funcional feliz | Alta | Sí (Jest + supertest) |
 | TC-060 | HU-13 | RF-020 | Regenerar token | Pantalla Entrada registrada | token anterior | 1. Regenerar el token<br>2. Abrir la URL anterior | La URL anterior responde 404; la nueva funciona | Negativa | Alta | Sí (supertest) |
 | TC-061 | HU-14 | RF-021 | Reproducción en bucle | Pantalla con 3 contenidos | URL /screen/<token> | 1. Abrir la URL en pantalla completa<br>2. Esperar un ciclo | Se reproducen en orden y vuelve a empezar | Funcional feliz | Alta | Sí (Playwright) |
@@ -731,35 +731,80 @@ Automated (`backend/test/screens/screens.use-cases.spec.ts`):
 
 Manual (contra la base): `PATCH /screens/:id` con `{"is_active": false}` da 200 y luego `GET /player/:token/playlist` da 404 `SCREEN_NOT_FOUND`; reactivarla vuelve a dar 200; `{}` da 400 `EMPTY_UPDATE`; el id de una pantalla de `local1` con el token de `local2` da 404; `updated_at` cambia tras la edición.
 
+Player (automated, `mobile/src/lib/playlist-rules.test.ts`):
+- PL-37 `activeItems(payload, now)`: inicio de franja inclusivo y fin exclusivo, franjas contiguas (a las 12:00 manda la segunda), conversión de día (lunes=1, domingo=64 con `getDay()` domingo=0), máscara de varios días, franja activa sin items cae al por defecto, sin franja ni por defecto da lista vacía.
+- PL-38 `advance`/`receivePlaylist`: la selección se reevalúa al terminar el elemento en curso (cambio de franja sin nueva consulta); una franja distinta reinicia desde el primer item; una playlist nueva espera al fin del elemento; el caché y la validación (`parsePlaylist`) aceptan el payload `default` + `slots` y rechazan franjas o items inválidos.
+- PL-39 (manual, reproductor web) Con una franja que empieza en 2 minutos y la pantalla reproduciendo el por defecto, el cambio ocurre al terminar el elemento en curso; sin por defecto ni franja activa, la franja arranca dentro de 15 s; con la red cortada el cambio ocurre igual.
+
+Backoffice UI, sección Pantallas (automated: `mobile/src/lib/schedule-rules.test.ts` y `content-rules.test.ts`; el resto es manual):
+- PL-40 (automatizado) `daysLabel` ("Lun a Vie", "Fin de semana", "Todos los días", rangos y listas), `DAY_SHORTCUTS`, `startOptions`/`endOptions` (pasos de 30 min, fin hasta 23:59), `formatTime`, `slotLabel` ("Lun a Vie · 8:00 a 12:00"), `activePlaylistId` (franja por día y hora local, fin exclusivo, sin nada = null, lista vacía cae al por defecto), `updateSlot`/`removeSlotAt`, `setDefault`/`addSlot`/`removeAssignment`, `toInput`, `itemsPayload` (los videos no envían duración) y los mensajes de error (`SLOT_OVERLAP` = "Ese horario se superpone con otro de esta pantalla.", `MEDIA_IN_USE`).
+- PL-41 (manual) Pestañas Pantallas / Listas / Imágenes y videos. Cada tarjeta de pantalla muestra miniaturas y "Ahora: <lista>" según el día y la hora actuales; "Sin contenido" si no hay nada. Cambiar el horario de una pantalla y volver a la pestaña actualiza la tarjeta.
+- PL-42 (manual) Primer uso: en una pantalla sin nada asignada, "Subir imagen o video" sube el archivo, crea una lista con el nombre de la pantalla y la deja en "Siempre muestra" (3 toques); un archivo inválido o demasiado grande muestra el error sin crear nada.
+- PL-43 (manual) Detalle de pantalla: cambiar "Siempre muestra" (incluida "Nada") guarda al instante y muestra "Guardado"; agregar/editar un horario especial con días rápidos, días sueltos y horas de lista (sin texto libre); un horario superpuesto vuelve al estado anterior y muestra el mensaje de superposición; quitar un horario pide confirmación; "Conectar al televisor" está plegado, copia el enlace y no habla de "token".
+- PL-44 (manual) Editor de lista: "+ Agregar" con "Subir nuevo" y "Elegir de los ya subidos"; duración de imagen con +/− (3 a 60); reordenar y quitar; los cambios se guardan solos (recargar conserva orden y duraciones; salir enseguida no pierde el último cambio); renombrar guarda al salir del campo. "Se muestra en": tildar una pantalla de cualquier local la deja en su "Siempre muestra", destildar la deja en "Nada"; los horarios especiales aparecen como "También en horario especial" y solo se editan desde la pantalla. Eliminar lista pide confirmación.
+- PL-45 (manual) Imágenes y videos: grilla con miniaturas, subir, eliminar con confirmación; borrar uno usado en una lista muestra "Está en uso en una lista; quitalo de la lista primero." y el archivo sigue.
+- PL-46 (manual, permisos) Sin `content:*` solo se ve la pestaña Pantallas (sin miniaturas) y no hay creación de listas ni subidas; sin `screens:update` el detalle de pantalla, los horarios y "Se muestra en" son de solo lectura (sin botones que no hagan nada).
+
 Pending: supertest con base para el aislamiento por tenant, el orden por `created_at`, el `UPDATE` parcial en SQL, los 400 de `name` (vacío o de más de 80) e `is_active` no booleano, `screenId` no UUID, los 400 de validación (`store_id` no UUID, nombre vacío o de más de 80) y el 403 sin permiso; que la URL abra el reproductor (TC-059, depende del reproductor); TC-060 y TC-151 (R2).
 
-### Contenido de pantalla (#70, RF-018, RF-019)
+### Biblioteca de medios y playlists (RF-018, RF-019; feature `playlists-pantallas`)
+
+La biblioteca (`/content`) y las playlists (`/playlists`) son del tenant. Los casos de esta sección usan los ids `PL-xx` y no están contados en la tabla formal de TC (que conserva su numeración); cuando un TC existente cambia de comportamiento, se anota cuál.
 
 Automated (`backend/test/content/content.use-cases.spec.ts`; la duración de video va detrás del puerto `IVideoProbe`, sin ffprobe en los tests):
-- Tipo por contenido real: JPG y MP4 reconocidos por magic bytes; un `.exe` renombrado da 415 `UNSUPPORTED_MEDIA_TYPE` sin guardar archivo (TC-053).
-- Alta de imagen: 5 242 880 bytes aceptado y 5 242 881 da 413 `MEDIA_TOO_LARGE`; duración por defecto 10 o `DEFAULT_IMAGE_SECONDS`; usa la duración enviada; se agrega con el archivo guardado y la `url` bajo `/media` (TC-052).
-- Alta de video: la duración se mide con el `Buffer` antes de guardar (un video inválido nunca se sube); 60 s aceptado y 61 s da 422 `VIDEO_TOO_LONG` sin llamar a `storage.save` (TC-055, TC-056); 52 428 800 bytes aceptado y 52 428 801 da 413 (TC-054, TC-055); lectura fallida da 422 `MEDIA_UNREADABLE` sin guardar; si falla el insert del video se borra el archivo guardado; `duration_seconds` con un video da 422 sin guardar.
-- Alta: `STORE_NOT_FOUND`; el archivo se borra si falla el insert.
-- Listado: `STORE_NOT_FOUND`; consulta con `tenant_id` y `store_id`; incluye ocultos, sin `file_path`.
-- Edición: 400 `EMPTY_UPDATE`; 404 `CONTENT_NOT_FOUND` (otro tenant); 422 con duración en un video; ocultar un video; duración de una imagen.
-- Orden: `STORE_NOT_FOUND`; 422 si falta, sobra o es ajeno un contenido (sin tocar el repositorio); reasigna incluyendo ocultos y devuelve el nuevo orden (TC-058).
-- Borrado: 404 si no existe en el tenant; borra la fila y después el archivo.
+- PL-01 Tipo por contenido real: JPG y MP4 reconocidos por magic bytes; un `.exe` renombrado da 415 `UNSUPPORTED_MEDIA_TYPE` sin guardar archivo (TC-053).
+- PL-02 Alta de imagen: 5 242 880 bytes aceptado y 5 242 881 da 413 `MEDIA_TOO_LARGE`; se guarda en el tenant con `duration_seconds: null` (la duración es del item de playlist) y la `url` bajo `/media` (TC-052, ya no se agrega "al final de una lista").
+- PL-03 Alta de video: la duración se mide antes de guardar (un video inválido nunca se sube); 60 s aceptado y 61 s da 422 `VIDEO_TOO_LONG` sin llamar a `storage.save` (TC-055, TC-056); 52 428 800 bytes aceptado y 52 428 801 da 413 (TC-054); lectura fallida da 422 `MEDIA_UNREADABLE` sin guardar; si falla el insert se borra el archivo.
+- PL-04 Listado: consulta solo con `tenant_id` (biblioteca del tenant, sin `store_id`); sin `file_path` en la respuesta.
+- PL-05 Borrado: 404 `MEDIA_NOT_FOUND` si no existe en el tenant (otro tenant incluido); **409 `MEDIA_IN_USE`** cuando la FK `ON DELETE RESTRICT` rechaza el borrado (error 23503) y el archivo se conserva; otros errores de base se propagan; sin conflicto, borra la fila y después el archivo.
 
-Manual (contra la base, `ffprobe` en el PATH; la sonda escribe el video en un archivo temporal de `os.tmpdir()` y lo borra siempre; comprobar que no quedan `probe-*.mp4`): subir un MP4 real de 2,3 s y comprobar `duration_seconds: 3`; subir un archivo corrupto con extensión `.mp4` y comprobar 422 `MEDIA_UNREADABLE`; borrar un contenido intermedio y comprobar que los restantes quedan con `sort_order` consecutivo y que el archivo desapareció de `UPLOADS_DIR`; con el token de `local2`, `GET /content?store_id=` de un local de `local1` da 404 y `PATCH`/`DELETE` de un contenido de `local1` dan 404 (RNF-012).
+Automated (`backend/test/content/playlists.use-cases.spec.ts`):
+- PL-06 Playlists: listado y alta con `tenant_id`; renombrar y borrar dan 404 `PLAYLIST_NOT_FOUND` si la playlist es de otro tenant.
+- PL-07 Detalle: 404 sin leer items si no es del tenant; items en orden con `url` y duración efectiva (la del item en imágenes, la real en videos).
+- PL-08 `PUT /playlists/:id/items`: 404 `PLAYLIST_NOT_FOUND`; 404 `MEDIA_NOT_FOUND` si algún medio es de otro tenant (nada se guarda); 422 `DURATION_REQUIRED` (imagen sin duración); 422 `DURATION_NOT_ALLOWED` (video con duración); el mismo medio repetido con duraciones distintas (5 s y 20 s) y el video guardado con duración `null`; lista vacía vacía la playlist.
+- PL-09 Pantallas de la playlist: 404 si no es del tenant; devuelve pantallas de cualquier local con `days/start/end` y hora como `HH:MM` (`null` = por defecto).
+- Permisos (`backend/test/roles/route-permissions.spec.ts`): todas las rutas de `PlaylistsController` exigen permisos y el empleado no puede leerlas ni editarlas.
 
-Pending: supertest con base para el aislamiento por tenant, el `INSERT ... max + 1`, la transacción de orden y de borrado, los 400 de validación (`store_id` o `contentId` no UUID, falta `file`, `duration_seconds` fuera de 3 a 60, `content_ids` vacío o repetido), el 403 sin permiso y el 413 real del video de 50 MB; TC-148 y TC-150 (k6); TC-058 (Playwright, depende del reproductor).
+Manual (contra la base; la base se recrea con `001_schema.sql`):
+- PL-10 Subir una imagen y un video, crear dos playlists y poner el mismo medio en ambas: `DELETE /content/:id` da 409 `MEDIA_IN_USE` y el archivo sigue en `UPLOADS_DIR`; vaciar ambas playlists (`PUT items` con `[]`) y repetir el borrado da 204 y el archivo desaparece.
+- PL-11 `PUT /playlists/:id/items` con la misma imagen dos veces (5 s y 20 s) y un video: `GET /playlists/:id` devuelve 3 items con posiciones 1 a 3 y duraciones 5, real del video y 20; con `duration_seconds: 2` o `61` da 400 (límite 3 a 60: probar 2 y 3, 60 y 61; TC-057 ahora se aplica al item de playlist).
+- PL-12 Aislamiento (RNF-012): con el token de `local2`, `GET /playlists/:id`, `PUT items`, `DELETE` y `GET /playlists/:id/screens` de una playlist de `local1` dan 404; poner en `PUT items` un `media_id` de `local1` da 404 `MEDIA_NOT_FOUND`; `GET /content` solo lista los medios del propio tenant.
+- PL-13 Borrar una playlist borra sus items y sus asignaciones a pantallas, y los medios siguen en la biblioteca.
+- PL-14 (esquema) Aplicar `001_schema.sql` dos veces sobre una base limpia: la segunda corrida no cambia nada; `playlist_items` rechaza duración 2 y posición repetida; `media_items` rechaza una imagen con duración y un video sin ella.
+- PL-15 (no funcional, rendimiento) `GET /playlists/:id` y `PUT items` con 100 items (el máximo) responden en menos de 500 ms (meta propuesta; pendiente de medir).
+
+Pending: supertest con base para el aislamiento por tenant, el `unnest ... WITH ORDINALITY` de `replaceItems` y la transacción, el 403 sin permiso, los 400 de validación (`playlistId` no UUID, nombre vacío o de más de 80, más de 100 items, `duration_seconds` fuera de 3 a 60) y el 413 real del video de 50 MB; TC-148 y TC-150 (k6); TC-058 (Playwright, el reordenamiento ahora es de items de playlist y depende del reproductor).
+
+### Agenda de pantalla (feature `playlists-pantallas`, RF-019, RF-020, RF-021)
+
+Automated (`backend/test/screens/screen-schedule.spec.ts`):
+- PL-20 Solape (función de dominio pura `slotsOverlap` / `findOverlap`): comparten un día y los intervalos se cruzan; un intervalo contiene al otro; mismo horario con un solo día en común; **no** se solapan si solo se tocan en el borde (`08:00-12:00` y `12:00-14:00`) ni si no comparten ningún día aunque el horario coincida; `findOverlap` devuelve los índices del primer par o `null`.
+- PL-21 Franja válida (`isValidSlot`): `end` posterior a `start` (iguales o invertidos son inválidos, una franja no cruza la medianoche) y `days` entre 1 y 127 (0 y 128 inválidos).
+- PL-22 `GET /screens/:id/schedule`: 404 `SCREEN_NOT_FOUND` si la pantalla es de otro tenant; sin asignaciones devuelve `default_playlist_id: null` y `slots: []`; separa el por defecto de las franjas con hora `HH:MM`.
+- PL-23 `PUT /screens/:id/schedule`: 404 `SCREEN_NOT_FOUND` sin guardar; 422 `INVALID_SLOT`; 422 `SLOT_OVERLAP` con `details.slots` = índices de las franjas que chocan; acepta franjas contiguas, la misma playlist en varias franjas y días distintos a la misma hora; 404 `PLAYLIST_NOT_FOUND` si alguna playlist es de otro tenant (consulta con el `tenant_id` y no guarda); sin por defecto guarda `null`; agenda vacía quita todo sin consultar playlists.
+
+Automated (`backend/test/screens/get-playlist.use-case.spec.ts`):
+- PL-24 Token inexistente, de pantalla o local inactivo, o de otro tenant: 404 `SCREEN_NOT_FOUND`, sin leer la agenda (la consulta filtra por `tenant_id`, token y ambos `is_active`).
+- PL-25 Respuesta con claves en el orden del contrato (`version`, `poll_interval_seconds`, `store`, `qr_url`, `default`, `slots`), `poll_interval_seconds` 30, `qr_url` = origen del tenant + `/` + slug del local + `?src=` + `screen_id`.
+- PL-26 `default` con los items de su playlist (`media_id`, `type`, `url`, `duration_seconds` efectiva) o `null`; cada franja con `days`, `start`/`end` `HH:MM` e items de su playlist; una playlist vacía da `items: []`; los items de todas las playlists se leen en una sola consulta con el `tenant_id`.
+- PL-27 Sin asignaciones: `default: null`, `slots: []`, sin consultar items y versión de 16 hex.
+- PL-28 `version` estable con los mismos datos y distinta al cambiar la duración de un item, agregar o reordenar items, el nombre o slug del local, la playlist por defecto, quitar el por defecto, agregar una franja, o los días, el inicio o el fin de una franja (RF-023).
+
+Manual (contra la base):
+- PL-29 `GET /player/:token/playlist` con el `Host` del tenant da 200 con `ETag: "<version>"` y `Cache-Control: no-cache`; repetirlo con `If-None-Match` igual da 304 sin cuerpo; tras `PUT /screens/:id/schedule` o `PUT /playlists/:id/items` pasa a 200 con otra versión; desactivar la pantalla o el local da 404; el token de `local1` con el `Host` de `local2` da el mismo 404.
+- PL-30 Asignar la misma playlist a pantallas de dos locales del tenant (`PUT schedule` en cada una): `GET /playlists/:id/screens` lista ambas con su local; con un `screenId` o `playlist_id` de otro tenant `PUT` da 404 y no cambia nada.
+- PL-31 Dos franjas solapadas (`days` 31 `08:00-12:00` y `days` 4 `11:00-13:00`) dan 422 `SLOT_OVERLAP`; `08:00-12:00` y `12:00-14:00` se aceptan; `end` igual a `start` da 422 `INVALID_SLOT`; `days: 0`, `"7:00"` o `"24:00"` dan 400.
+- PL-32 Borrar una playlist asignada: `GET /screens/:id/schedule` ya no la muestra y el player la omite en la siguiente consulta.
+- PL-33 (esquema) La base rechaza una segunda playlist por defecto para la misma pantalla (`uq_screen_playlists_default`), una franja con `end_time <= start_time` y una fila con `days` pero sin horas (`ck_screen_playlists_schedule`).
+- PL-34 (no funcional, rendimiento) `GET /player/:token/playlist` de una pantalla con por defecto y 10 franjas de 100 items cada una responde en menos de 500 ms p95 con 100 pantallas consultando cada 30 s (meta propuesta, pendiente de medir con k6; reutiliza `perf/k6/stress.js`).
+- PL-35 (no funcional, sin red) El reproductor con la última respuesta guardada cambia de por defecto a franja y viceversa por su reloj local aunque no haya red (cubierto en `mobile`, ver `playlist-rules.test.ts`).
+- PL-36 (no funcional, seguridad) Con el token de `local2`, `GET`/`PUT /screens/:id/schedule` de una pantalla de `local1` dan 404 (RNF-012); un empleado recibe 403 en ambos.
+
+Pending: supertest con base para el aislamiento por tenant, el reemplazo transaccional (`DELETE` + `unnest` con `JOIN playlists`), el 403 sin permiso y los 400 de validación (`days`, `HH:MM`, UUID, más de 50 franjas); PL-34 con k6.
 
 ### Reproductor: playlist (#71, RF-021 a RF-024)
 
-Automated (`backend/test/screens/get-playlist.use-case.spec.ts`):
-- Token inexistente, de pantalla o local inactivo, o de otro tenant: 404 `SCREEN_NOT_FOUND`, sin consultar contenido (la consulta filtra por `tenant_id`, token y ambos `is_active`).
-- Respuesta con claves en el orden del contrato, `poll_interval_seconds` 30, `qr_url` = origen del tenant + `/` + slug del local + `?src=` + `screen_id`.
-- Solo contenidos visibles, en orden de `sort_order`; sin visibles da `items: []` y versión de 16 hex.
-- `version` estable con los mismos datos y distinta al cambiar duración, ocultar, agregar, reordenar, nombre o slug del local (RF-023).
-
-Manual (contra la base): `GET /player/:token/playlist` con el `Host` del tenant da 200 con `ETag: "<version>"` y `Cache-Control: no-cache`; repetirlo con `If-None-Match` igual da 304 sin cuerpo; tras mover un contenido pasa a 200 con otra versión; desactivar la pantalla o el local da 404; el token de `local1` con el `Host` de `local2` da el mismo 404.
-
-Pending: supertest con base para el `JOIN` y el aislamiento por tenant, el 304 real y los encabezados; reproductor web (TC de polling, RNF-009, RNF-010) depende de la UI.
+Las pruebas del payload (token, claves, versión) están en "Agenda de pantalla" arriba (PL-24 a PL-29). El contrato anterior (`items` planos por local, contenido visible y `sort_order`) ya no existe: el payload es `default` + `slots`.
 
 ### Sesión: `GET /me` (#21, RF-007, RF-009)
 

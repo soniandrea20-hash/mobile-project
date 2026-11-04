@@ -2,6 +2,7 @@ import { Platform } from 'react-native';
 
 import type { OrderStatus } from '@/components/ui/mostrador/badge';
 import { authRequest, resolveImageUrl } from '@/lib/api';
+import type { ScheduleInput, SlotInput } from '@/lib/schedule-rules';
 import type { NewTenantInput } from '@/lib/tenant-rules';
 
 export type Category = { category_id: string; name: string; sort_order: number };
@@ -114,34 +115,76 @@ export const getStore = (id: string) => authRequest<Store>(`/stores/${id}`);
 export const updateStore = (id: string, input: { name?: string; whatsapp_number?: string | null }) =>
   authRequest<Store>(`/stores/${id}`, json('PATCH', input));
 
-export type ContentItem = {
-  content_id: string;
+export type Media = {
+  media_id: string;
+  type: 'image' | 'video';
+  url: string;
+  original_name: string;
+  /** Real length for videos; images get theirs per playlist item. */
+  duration_seconds: number | null;
+};
+
+const withUrl = <T extends { url: string }>(m: T): T => ({ ...m, url: resolveImageUrl(m.url) ?? m.url });
+
+export const listMedia = async () => (await authRequest<Media[]>('/content')).map(withUrl);
+
+export async function uploadMedia(file: PickedImage) {
+  return withUrl(await authRequest<Media>('/content', { method: 'POST', body: await buildImageForm(file) }));
+}
+
+export const deleteMedia = (id: string) => authRequest<unknown>(`/content/${id}`, { method: 'DELETE' });
+
+export type Playlist = { playlist_id: string; name: string; item_count: number };
+
+export type PlaylistItem = {
+  media_id: string;
   type: 'image' | 'video';
   url: string;
   original_name: string;
   duration_seconds: number;
-  is_visible: boolean;
 };
 
-const withUrl = (c: ContentItem): ContentItem => ({ ...c, url: resolveImageUrl(c.url) ?? c.url });
+export type PlaylistDetail = Playlist & { items: PlaylistItem[] };
 
-export const listContent = async (storeId: string) =>
-  (await authRequest<ContentItem[]>(`/content?store_id=${storeId}`)).map(withUrl);
+export const listPlaylists = () => authRequest<Playlist[]>('/playlists');
 
-export async function uploadContent(storeId: string, file: PickedImage, durationSeconds?: number) {
-  const form = await buildImageForm(file);
-  form.append('store_id', storeId);
-  if (durationSeconds !== undefined) form.append('duration_seconds', String(durationSeconds));
-  return withUrl(await authRequest<ContentItem>('/content', { method: 'POST', body: form }));
-}
+export const createPlaylist = (name: string) => authRequest<Playlist>('/playlists', json('POST', { name }));
 
-export const updateContent = async (id: string, input: { duration_seconds?: number; is_visible?: boolean }) =>
-  withUrl(await authRequest<ContentItem>(`/content/${id}`, json('PATCH', input)));
+export const renamePlaylist = (id: string, name: string) =>
+  authRequest<Playlist>(`/playlists/${id}`, json('PATCH', { name }));
 
-export const reorderContent = (storeId: string, contentIds: string[]) =>
-  authRequest<ContentItem[]>('/content/order', json('PUT', { store_id: storeId, content_ids: contentIds }));
+export const deletePlaylist = (id: string) => authRequest<unknown>(`/playlists/${id}`, { method: 'DELETE' });
 
-export const deleteContent = (id: string) => authRequest<unknown>(`/content/${id}`, { method: 'DELETE' });
+export const getPlaylist = async (id: string) => {
+  const detail = await authRequest<PlaylistDetail>(`/playlists/${id}`);
+  return { ...detail, items: detail.items.map(withUrl) };
+};
+
+/** Replaces the whole list; videos must not send a duration. */
+export const savePlaylistItems = (id: string, items: { media_id: string; duration_seconds?: number }[]) =>
+  authRequest<PlaylistDetail>(`/playlists/${id}/items`, json('PUT', { items }));
+
+export type PlaylistScreen = {
+  screen_id: string;
+  screen_name: string;
+  store_id: string;
+  store_name: string;
+  days: number | null;
+  start: string | null;
+  end: string | null;
+};
+
+export const listPlaylistScreens = (id: string) => authRequest<PlaylistScreen[]>(`/playlists/${id}/screens`);
+
+export type Schedule = {
+  default_playlist_id: string | null;
+  slots: (SlotInput & { playlist_name: string })[];
+};
+
+export const getSchedule = (screenId: string) => authRequest<Schedule>(`/screens/${screenId}/schedule`);
+
+export const saveSchedule = (screenId: string, schedule: ScheduleInput) =>
+  authRequest<Schedule>(`/screens/${screenId}/schedule`, json('PUT', schedule));
 
 export type Tenant = { tenant_id: string; name: string; slug: string; is_active: boolean; created_at: string };
 

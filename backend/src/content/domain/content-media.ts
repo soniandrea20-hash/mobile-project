@@ -4,6 +4,8 @@ export { IMAGE_MAX_BYTES };
 export const VIDEO_MAX_BYTES = 52_428_800;
 export const VIDEO_MAX_SECONDS = 60;
 export const IMAGE_MIN_SECONDS = 3;
+export const IMAGE_MAX_SECONDS = 60;
+export const PLAYLIST_MAX_ITEMS = 100;
 
 export interface MediaKind {
     type: 'image' | 'video';

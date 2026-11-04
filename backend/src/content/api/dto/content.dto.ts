@@ -1,47 +1,32 @@
-import { Type } from "class-transformer";
-import { ArrayNotEmpty, ArrayUnique, IsArray, IsBoolean, IsInt, IsOptional, IsUUID, Max, Min, ValidateIf } from "class-validator";
-import { IMAGE_MIN_SECONDS, VIDEO_MAX_SECONDS } from "../../domain/content-media";
+import { Transform, Type } from "class-transformer";
+import { ArrayMaxSize, IsArray, IsInt, IsOptional, IsString, IsUUID, Length, Max, Min, ValidateNested } from "class-validator";
+import { IMAGE_MIN_SECONDS, IMAGE_MAX_SECONDS, PLAYLIST_MAX_ITEMS } from "../../domain/content-media";
 
-// Optional field that, when sent, must not be null (NOT NULL columns).
-const IsDefinedIfSent = () => ValidateIf((_, value) => value !== undefined);
+const trim = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
 
-export class ListContentQueryDto {
-    @IsUUID()
-    store_id: string;
+export class PlaylistNameDto {
+    @Transform(trim)
+    @IsString()
+    @Length(1, 80)
+    name: string;
 }
 
-// Multipart fields arrive as strings; the file itself is read by the interceptor.
-export class CreateContentDto {
+export class PlaylistItemDto {
     @IsUUID()
-    store_id: string;
+    media_id: string;
 
+    // Required for images and forbidden for videos; the use case checks it against the media type.
     @IsOptional()
-    @Type(() => Number)
     @IsInt()
     @Min(IMAGE_MIN_SECONDS)
-    @Max(VIDEO_MAX_SECONDS)
+    @Max(IMAGE_MAX_SECONDS)
     duration_seconds?: number;
 }
 
-export class UpdateContentDto {
-    @IsDefinedIfSent()
-    @IsInt()
-    @Min(IMAGE_MIN_SECONDS)
-    @Max(VIDEO_MAX_SECONDS)
-    duration_seconds?: number;
-
-    @IsDefinedIfSent()
-    @IsBoolean()
-    is_visible?: boolean;
-}
-
-export class ReorderContentDto {
-    @IsUUID()
-    store_id: string;
-
+export class SetPlaylistItemsDto {
     @IsArray()
-    @ArrayNotEmpty()
-    @ArrayUnique()
-    @IsUUID('all', { each: true })
-    content_ids: string[];
+    @ArrayMaxSize(PLAYLIST_MAX_ITEMS)
+    @ValidateNested({ each: true })
+    @Type(() => PlaylistItemDto)
+    items: PlaylistItemDto[];
 }

@@ -4,6 +4,7 @@ import { TenantsModule } from 'src/tenants/tenants.module';
 import { ScreensController } from './api/screens.controller';
 import { PlayerController } from './api/player.controller';
 import { GetPlaylistUseCase } from './application/get-playlist.use-case';
+import { GetScreenScheduleUseCase, SetScreenScheduleUseCase } from './application/screen-schedule.use-cases';
 import { CreateScreenUseCase } from './application/create-screen.use-case';
 import { ListScreensUseCase } from './application/list-screens.use-case';
 import { UpdateScreenUseCase } from './application/update-screen.use-case';
@@ -19,6 +20,8 @@ import { PostgreScreenRepository } from './infraestructure/postgre-screen.reposi
     ListScreensUseCase,
     UpdateScreenUseCase,
     GetPlaylistUseCase,
+    GetScreenScheduleUseCase,
+    SetScreenScheduleUseCase,
   ],
 })
 export class ScreensModule {}

@@ -19,7 +19,7 @@ function WebPlayer({ token }: { token: string }) {
   if (status === 'invalid') return <Message text="Pantalla no válida" />;
   if (status === 'waiting') return <Message text="Esperando conexión para cargar el contenido…" />;
   if (status === 'loading' || !state.current) return <View style={styles.center} />;
-  return <PlayerStage playlist={state.current} index={state.index} cycle={state.cycle} qrUrl={qrUrl} onDone={next} />;
+  return <PlayerStage items={state.items} storeName={state.current.store.name} index={state.index} cycle={state.cycle} qrUrl={qrUrl} onDone={next} />;
 }
 
 export default function ScreenPlayer() {
