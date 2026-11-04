@@ -27,7 +27,7 @@ One branch per requirement, stacked (each from the previous one) so they squash 
 - [x] T1 RNF-017 structured logging: JSON logger (Nest + TypeORM), requestId via AsyncLocalStorage + response header, tenantId (`null` when unresolved), redaction of password/token/authorization/cookie. Branch `feat/r2-logging`. Route: delegated (writer trigger).
 - [x] T2 RF-035 tenant suspension: 503 `TENANT_SUSPENDED` for known inactive tenant (login included), `/tenants/:id/suspend` and `/reactivate`, maintenance screen in self-order, Root panel on admin host. Branch `feat/r2-tenants-root`. Route: delegated.
 - [x] T3 RNF-003 API response time: compression, k6 scripts (TC-112 and stress), index review. Target measurement pending infra. Branch `feat/r2-api-rendimiento`. Route: delegated.
-- [ ] T4 RNF-002 self-order load: catalog cache headers, image resizing, Lighthouse CI config with budget (TC-184). Target measurement pending infra. Branch `feat/r2-selforder-carga`. Route: delegated.
+- [x] T4 RNF-002 self-order load: catalog cache headers, image resizing, Lighthouse CI config with budget (TC-184). Target measurement pending infra. Branch `feat/r2-selforder-carga`. Route: delegated.
 - [ ] T5 RNF-018 multiplatform backoffice: shared-code measurement script, CI workflow for web export and debug APK (TC-128). Build-time target pending CI run. Branch `feat/r2-backoffice-multiplataforma`. Route: delegated.
 
 ## Progress
@@ -40,5 +40,7 @@ One branch per requirement, stacked (each from the previous one) so they squash 
 
 - T3 done: `493bb7e` gzip via `compression` (after logging, before media/body parsers), k6 scripts `perf/k6/` (TC-112, stress load/breakpoint, TC-180), no index script (existing indexes cover hot queries). RED observed, GREEN 37 suites / 327, tsc clean; parent re-ran http suite (4 green). Assessed high → verifier: no defects; weak spot: 304 test body under the 1 KB gzip threshold. **Pending infra:** p95 < 500 ms and errors < 1% not measured (no staging, no DB, no k6 binary; scripts only syntax-checked).
 
+- T4 done: `38454f5` public catalog ETag + `Cache-Control: public, max-age=60, stale-while-revalidate=300` + 304; images already resized to 1280 px on upload (no change); Lighthouse config `perf/lighthouse/lighthouserc.json` (perf ≥ 0.8, LCP ≤ 2500, image ≤ 600 KB). Parent found a cross-tenant shared-cache risk (tenant via `X-Tenant-Slug`) → fix `b77a439` `Vary: X-Tenant-Slug` (RED 1 test, GREEN 68 products tests, tsc clean). Assessed high → verifier: no defects; stale catalog up to ~6 min is display-only (server re-prices orders). **Pending infra:** LCP / Lighthouse score not measured (web not published, no staging).
+
 ## Next step
-T4 RNF-002.
+T5 RNF-018.

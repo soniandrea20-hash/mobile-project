@@ -12,7 +12,7 @@ Los identificadores RNF-xxx coinciden con `docs/requerimientos.xlsx`. Se agrupan
 
 | ID | Descripción | Meta medible | Verificación | Prioridad |
 | --- | --- | --- | --- | --- |
-| RNF-002 | Tiempo de carga del autopedido | Carga < 3 s en 4G simulada; LCP ≤ 2,5 s; performance Lighthouse ≥ 80 | Lighthouse (móvil, 4G) | Alta |
+| RNF-002 | Tiempo de carga del autopedido | Carga < 3 s en 4G simulada; LCP ≤ 2,5 s; performance Lighthouse ≥ 80 (palancas: caché HTTP del catálogo, imágenes ≤ 1280 px; configuración en `perf/lighthouse/`; sin medir, falta staging) | Lighthouse (móvil, 4G) | Alta |
 | RNF-003 | Tiempo de respuesta de la API | p95 < 500 ms con 50 usuarios concurrentes; errores < 1% (scripts en `perf/k6/`) | k6 o JMeter | Alta |
 | RNF-004 | Latencia de actualización de la pantalla | Consulta cada 30 s; cambio visible en ≤ 60 s en el 95% de las pruebas | Prueba manual cronometrada y prueba automatizada (Playwright) | Media |
 | RNF-005 | Límites de tamaño del contenido | Imagen ≤ 5 MB; video ≤ 50 MB y ≤ 60 s; archivos mayores rechazados con 413 | Pruebas de API (Jest) y manual en límites | Alta |

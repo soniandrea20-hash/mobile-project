@@ -32,3 +32,15 @@ Notas:
 - Cada pedido incrementa `tenants.last_order_number` con un bloqueo de fila: los pedidos de un mismo tenant se serializan, por lo que `catalog-orders.js` mide también ese límite.
 - Los pedidos de la carga quedan guardados: usar una base de desarrollo.
 - Para TC-188 observar CPU, memoria y errores del servidor aparte; k6 solo mide el lado cliente. En el paso de 400 VUs no hay umbral: se espera degradación gradual sin caída del proceso.
+
+# Lighthouse (RNF-002)
+
+`lighthouse/lighthouserc.json`: Lighthouse CI móvil con 4G simulada (RTT 150 ms, 1,6 Mbps, CPU 4x más lento), 5 corridas. Falla si performance < 0,8, LCP > 2,5 s, TTI > 3 s, imágenes > 600 KB o peso total > 2 MB (el presupuesto de recursos va como aserciones `resource-summary:*`: LHCI no permite mezclarlo con un `budget.json`). Una imagen de 3 MB sin redimensionar lo rompe (TC-184). Meta pendiente de medir: no hay staging ni la web publicada.
+
+```bash
+# Editar `collect.url` en el archivo (o usar --collect.url) con la URL del autopedido de staging, p. ej. https://local1.staging.mostrador.io/palermo
+npx @lhci/cli autorun --config=perf/lighthouse/lighthouserc.json
+# TC-185: lanzar antes k6 (stress.js, 200 VUs) y correr esto durante la carga
+```
+
+`@lhci/cli` no es dependencia del proyecto: se ejecuta con `npx`. La caché del catálogo (`Cache-Control: public, max-age=60, stale-while-revalidate=300` + `ETag`) hace que las visitas repetidas no vuelvan a descargarlo; a cambio, un cambio en el catálogo puede tardar hasta ~1 min en verse.
