@@ -21,11 +21,11 @@ Implement five R2 requirements: Root tenant administration (RF-035), structured 
 - Planning heuristic ~400 authored lines per task; advisory only.
 
 ## Delivery
-One branch per requirement from `develop`, squash merged into `develop` by user decision.
+One branch per requirement, stacked (each from the previous one) so they squash into `develop` in order. The user decides the squashes.
 
 ## Tasks
 - [x] T1 RNF-017 structured logging: JSON logger (Nest + TypeORM), requestId via AsyncLocalStorage + response header, tenantId (`null` when unresolved), redaction of password/token/authorization/cookie. Branch `feat/r2-logging`. Route: delegated (writer trigger).
-- [ ] T2 RF-035 tenant suspension: 503 `TENANT_SUSPENDED` for known inactive tenant (login included), `/tenants/:id/suspend` and `/reactivate`, maintenance screen in self-order, Root panel on admin host. Branch `feat/r2-tenants-root`. Route: delegated.
+- [x] T2 RF-035 tenant suspension: 503 `TENANT_SUSPENDED` for known inactive tenant (login included), `/tenants/:id/suspend` and `/reactivate`, maintenance screen in self-order, Root panel on admin host. Branch `feat/r2-tenants-root`. Route: delegated.
 - [ ] T3 RNF-003 API response time: compression, k6 scripts (TC-112 and stress), index review. Target measurement pending infra. Branch `feat/r2-api-rendimiento`. Route: delegated.
 - [ ] T4 RNF-002 self-order load: catalog cache headers, image resizing, Lighthouse CI config with budget (TC-184). Target measurement pending infra. Branch `feat/r2-selforder-carga`. Route: delegated.
 - [ ] T5 RNF-018 multiplatform backoffice: shared-code measurement script, CI workflow for web export and debug APK (TC-128). Build-time target pending CI run. Branch `feat/r2-backoffice-multiplataforma`. Route: delegated.
@@ -36,5 +36,7 @@ One branch per requirement from `develop`, squash merged into `develop` by user 
 
 - T1 assessed: risk high (RDD off) → independent verifier. Found: error filter turned http-errors (413 body too large) into 500 and changed the default 500 body; aborted requests logged as 200. One correction `ff60cf8`: RED 3 tests, GREEN 36 suites / 313 tests, tsc clean; parent re-ran logging suites (16 green). Known limits: error messages/stacks are not redacted (pg duplicate-key may carry an email); lines outside a request have `request_id: null`.
 
+- T2 done: `c28b117` backend (503 `TENANT_SUSPENDED` incl. login, `/suspend` `/reactivate` via `SetTenantActiveUseCase`, owner 403 already from 001 grants, no DB script) and `61ffea6` mobile (maintenance screen in catalog and confirm, Comercios tab for root on admin host). RED observed both sides; GREEN backend 36 suites / 323, mobile 17 suites / 176; tsc and lint clean; parent re-ran tenant suites (73 green). Assessed high → independent verifier: no defects. Not run: screens in a browser, backend against a DB, Playwright TC-005/TC-075, k6 TC-180. Note: `/media` stays public for suspended tenants; a 503 on `/me` signs the owner out.
+
 ## Next step
-T2 RF-035.
+T3 RNF-003.

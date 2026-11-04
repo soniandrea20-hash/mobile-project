@@ -152,7 +152,7 @@ erDiagram
 | --- | --- | --- | --- | --- | --- |
 | `tenant_id` | UUID | no | `gen_random_uuid()` | PK | |
 | `name` | VARCHAR(150) | no | | | Ya existe. |
-| `is_active` | BOOLEAN | no | `TRUE` | | Ya existe. En R1 un tenant inactivo se trata como inexistente (404); el mensaje de mantenimiento es R2. |
+| `is_active` | BOOLEAN | no | `TRUE` | | Ya existe. `FALSE` = tenant suspendido (RF-035): sus rutas, incluido el login, responden 503 `TENANT_SUSPENDED` hasta reactivarlo. |
 | `slug` | VARCHAR(30) | no | | UNIQUE `uq_tenants_slug`; CHECK `ck_tenants_slug_format`: `slug ~ '^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$'`; CHECK `ck_tenants_slug_reserved`: `slug NOT IN ('www','api','app','admin')` | Es el subdominio (`local1.mostrador.io`). El patrón exige 3 a 30 caracteres en minúscula, solo letras, números y guion (RF-001) y además no empieza ni termina en guion porque un subdominio DNS no lo admite. |
 | `last_order_number` | INTEGER | no | `0` | CHECK `>= 0` | Contador del número público de pedido por tenant; se incrementa con `UPDATE ... RETURNING` dentro de la transacción del pedido. |
 
@@ -339,7 +339,7 @@ Quedan para R2 y **no** se crean en `001_schema.sql`:
 - Catálogo desde foto con IA (RF-015 a RF-017): sin tabla persistente; el borrador se confirma o se descarta.
 - Varios locales con empleados (RF-003 ampliado, RF-008): `users_stores` ya existe; faltan endpoints y el filtro por locales asignados.
 - Regeneración de token de pantalla: `screens.token` se reemplaza; `screen_id` no cambia.
-- Tenant suspendido con mensaje de mantenimiento (RF-035): puede requerir columna `suspended_at` o un estado en `tenants`.
+- ~~Tenant suspendido con mensaje de mantenimiento (RF-035)~~: resuelto en R2 reutilizando `tenants.is_active` (`false` = suspendido); sin columna nueva ni script. El middleware responde 503 `TENANT_SUSPENDED`.
 - Panel root, métricas y despliegue productivo.
 - Playlists por pantalla (`screen_content`) e historial de estados (`order_status_history`), solo si el requerimiento lo exige.
 

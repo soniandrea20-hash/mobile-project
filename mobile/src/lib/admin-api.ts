@@ -2,6 +2,7 @@ import { Platform } from 'react-native';
 
 import type { OrderStatus } from '@/components/ui/mostrador/badge';
 import { authRequest, resolveImageUrl } from '@/lib/api';
+import type { NewTenantInput } from '@/lib/tenant-rules';
 
 export type Category = { category_id: string; name: string; sort_order: number };
 
@@ -141,6 +142,15 @@ export const reorderContent = (storeId: string, contentIds: string[]) =>
   authRequest<ContentItem[]>('/content/order', json('PUT', { store_id: storeId, content_ids: contentIds }));
 
 export const deleteContent = (id: string) => authRequest<unknown>(`/content/${id}`, { method: 'DELETE' });
+
+export type Tenant = { tenant_id: string; name: string; slug: string; is_active: boolean; created_at: string };
+
+export const listTenants = () => authRequest<Tenant[]>('/tenants');
+
+export const createTenant = (input: NewTenantInput) => authRequest<Tenant>('/tenants', json('POST', input));
+
+export const setTenantActive = (id: string, active: boolean) =>
+  authRequest<Tenant>(`/tenants/${id}/${active ? 'reactivate' : 'suspend'}`, { method: 'POST' });
 
 export type Screen = {
   screen_id: string;

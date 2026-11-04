@@ -25,7 +25,7 @@ Toda ruta, salvo `/auth/*` y las del contexto admin (ver abajo), necesita un ten
 
 1. Se toma el Host de la solicitud. Si es `{slug}.{BASE_DOMAIN}`, ese `slug` se busca en `tenants.slug`. `BASE_DOMAIN` es `localhost` en desarrollo (`local1.localhost`) y `mostrador.io` en producción.
 2. Si el Host no trae subdominio utilizable (por ejemplo la app Android de Expo, que llama a una IP o a un host fijo) se lee el encabezado `X-Tenant-Slug: local1`. Ese encabezado solo se usa cuando el Host no aporta un slug.
-3. Responde **404** con `code: "TENANT_NOT_FOUND"` si el slug no existe, está en la lista reservada (`www`, `api`, `app`), tiene formato inválido o el tenant está inactivo (`is_active = false`).
+3. Responde **404** con `code: "TENANT_NOT_FOUND"` si el slug no existe, está en la lista reservada (`www`, `api`, `app`) o tiene formato inválido. Si el tenant existe pero está suspendido (`is_active = false`) responde **503** con `code: "TENANT_SUSPENDED"` en todas sus rutas, incluidos `/auth/*`: nadie entra ni confirma pedidos hasta reactivarlo. El contexto `admin` no se ve afectado.
 4. **Contexto admin (plataforma):** el slug reservado `admin` (`admin.{BASE_DOMAIN}` o `X-Tenant-Slug: admin`) no es un tenant: no se adjunta ninguna fila de `tenants` y la solicitud queda marcada como contexto de administrador de la plataforma. En ese contexto solo responden `/auth/*`, `/me` y `/tenants*`; cualquier otra ruta (`/stores`, `/public/*`, `/media/*`, etc.) da 404 `TENANT_NOT_FOUND`, así que el contexto admin nunca expone datos de un tenant.
 
 El tenant resuelto es el único `tenant_id` que usa cualquier consulta (ver aislamiento en `docs/modelo-datos.md`, sección 4).
@@ -67,7 +67,7 @@ Errores comunes a todas las rutas del backoffice (no se repiten en cada endpoint
 | 403 | El usuario no tiene el permiso requerido; o `code: "NOT_A_MEMBER"` si no es miembro del tenant del Host (en el contexto admin, si no es `root`). |
 | 404 | `code: "TENANT_NOT_FOUND"` (ver 1.2). Un identificador que no existe **o es de otro tenant** también da 404 (RNF-012). |
 
-Códigos de error de R1: `TENANT_NOT_FOUND`, `NOT_A_MEMBER`, `STORE_NOT_FOUND`, `SCREEN_NOT_FOUND`, `CONTENT_NOT_FOUND`, `CONTENT_LIST_MISMATCH`, `DURATION_NOT_ALLOWED`, `EMPTY_UPDATE`, `CATEGORY_NAME_TAKEN`, `CATEGORY_HAS_PRODUCTS`, `PRODUCT_LIMIT_REACHED`, `PRODUCTS_UNAVAILABLE`, `INVALID_STATUS_TRANSITION`, `MEDIA_TOO_LARGE`, `UNSUPPORTED_MEDIA_TYPE`, `VIDEO_TOO_LONG`, `MEDIA_UNREADABLE`, `ADMIN_ALREADY_EXISTS`, `USER_NOT_FOUND`, `INVALID_SLUG`, `SLUG_TAKEN`.
+Códigos de error de R1: `TENANT_NOT_FOUND`, `NOT_A_MEMBER`, `STORE_NOT_FOUND`, `SCREEN_NOT_FOUND`, `CONTENT_NOT_FOUND`, `CONTENT_LIST_MISMATCH`, `DURATION_NOT_ALLOWED`, `EMPTY_UPDATE`, `CATEGORY_NAME_TAKEN`, `CATEGORY_HAS_PRODUCTS`, `PRODUCT_LIMIT_REACHED`, `PRODUCTS_UNAVAILABLE`, `INVALID_STATUS_TRANSITION`, `MEDIA_TOO_LARGE`, `UNSUPPORTED_MEDIA_TYPE`, `VIDEO_TOO_LONG`, `MEDIA_UNREADABLE`, `ADMIN_ALREADY_EXISTS`, `USER_NOT_FOUND`, `INVALID_SLUG`, `SLUG_TAKEN`, `TENANT_SUSPENDED` (503, R2).
 
 ### 1.5 Paginación, fechas y dinero
 
@@ -200,9 +200,16 @@ Solo en el contexto admin (`admin.{BASE_DOMAIN}` o `X-Tenant-Slug: admin`, secci
 #### `PATCH /tenants/:tenantId`
 
 - Auth: JWT. Permiso: `tenants:update`.
-- Request: al menos uno de `name` (texto 1 a 150) o `is_active` (booleano). El `slug` no se edita (los QR impresos apuntan a él). `is_active: false` suspende el tenant: sus rutas dan 404 `TENANT_NOT_FOUND` hasta reactivarlo.
+- Request: al menos uno de `name` (texto 1 a 150) o `is_active` (booleano). El `slug` no se edita (los QR impresos apuntan a él). `is_active: false` suspende el tenant: sus rutas dan 503 `TENANT_SUSPENDED` hasta reactivarlo (equivale a `POST /tenants/:tenantId/suspend`).
 - Respuesta **200**: el tenant `{ tenant_id, name, slug, is_active, created_at }`.
 - Errores: 400 validación o `EMPTY_UPDATE`; 404 `TENANT_NOT_FOUND`.
+
+#### `POST /tenants/:tenantId/suspend` y `POST /tenants/:tenantId/reactivate`
+
+- Auth: JWT. Permiso: `tenants:update` (solo `root`; el dueño recibe 403).
+- Sin body. Respuesta **200**: el tenant `{ tenant_id, name, slug, is_active, created_at }` con `is_active` en `false` (suspend) o `true` (reactivate). Son idempotentes.
+- Errores: 400 `tenantId` no es uuid; 403; 404 `TENANT_NOT_FOUND`.
+- Mientras está suspendido, las rutas del tenant (incluido el login) responden 503 `TENANT_SUSPENDED`; el autopedido muestra la pantalla de mantenimiento y no permite confirmar pedidos.
 
 ## 4. Backoffice: locales (`/stores`)
 
@@ -710,7 +717,7 @@ Solo nombres; se definirán en R2:
 - Catálogo desde foto con IA (RF-015 a RF-017): `POST /catalog/photo-imports`, `GET /catalog/photo-imports/:id`, `POST /catalog/photo-imports/:id/confirm`.
 - Varios locales y empleados (RF-003 ampliado, RF-008): `POST /stores`, `PATCH /stores/:id` (alta y baja), `GET /employees`, `POST /employees`, `PATCH /employees/:id`, `PUT /employees/:id/stores`.
 - Regeneración de token: `POST /screens/:id/regenerate-token`.
-- Tenant suspendido (RF-035): `POST /tenants/:id/suspend`, `POST /tenants/:id/reactivate` (hoy se suspende con `PATCH /tenants/:id { is_active: false }`); respuesta 503 de mantenimiento en rutas públicas; panel web del root.
+- ~~Tenant suspendido (RF-035)~~: **hecho en R2** (sección 3.1: `POST /tenants/:id/suspend`, `POST /tenants/:id/reactivate`, 503 `TENANT_SUSPENDED`, panel del root en la app).
 - Métricas: `GET /metrics/orders`, `GET /metrics/screens`.
 - Control de abuso (límite de solicitudes) e idempotencia del alta de pedido.
 - Despliegue de producción (proxy, wildcard `*.mostrador.io`, copias de seguridad).

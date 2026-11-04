@@ -1,4 +1,4 @@
-import { Redirect } from 'expo-router';
+import { Redirect, useSegments } from 'expo-router';
 import { Tabs } from 'expo-router/js-tabs';
 import { View } from 'react-native';
 
@@ -7,20 +7,30 @@ import { Colors } from '@/components/ui/mostrador/tokens';
 import { useWide } from '@/components/ui/mostrador/use-wide';
 import { useSession } from '@/context/SessionContext';
 
+const ROOT_TAB: TabItem = { key: 'comercios', label: 'Comercios', icon: 'business-outline' };
+
 const TABS: (TabItem & { permission?: string })[] = [
   { key: 'catalogo', label: 'Catálogo', icon: 'grid-outline' },
   { key: 'pantallas', label: 'Pantallas', icon: 'tv-outline', permission: 'screens:read' },
   { key: 'ordenes', label: 'Órdenes', icon: 'receipt-outline' },
   { key: 'ajustes', label: 'Ajustes', icon: 'settings-outline' },
+  ROOT_TAB,
 ];
 
 export default function TabsLayout() {
   const { status, me } = useSession();
   const wide = useWide();
+  const segments = useSegments() as string[];
   if (status === 'loading') return null;
   if (status === 'out') return <Redirect href="/admin/login" />;
 
-  const visible = TABS.filter((t) => !t.permission || me?.permissions.includes(t.permission));
+  // Root on the admin host has no tenant: only the tenants panel applies.
+  const platformRoot = Boolean(me?.is_root && !me.tenant);
+  if (platformRoot && !segments.includes('comercios')) return <Redirect href="/admin/comercios" />;
+
+  const visible = TABS.filter((t) =>
+    t === ROOT_TAB ? platformRoot : !platformRoot && (!t.permission || me?.permissions.includes(t.permission)),
+  );
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.bg }}>

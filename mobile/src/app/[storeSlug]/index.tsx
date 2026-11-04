@@ -19,12 +19,13 @@ import { Colors, Fonts, Radius, Spacing } from '@/components/ui/mostrador/tokens
 import { useWide } from '@/components/ui/mostrador/use-wide';
 import { useCart } from '@/context/CartContext';
 import { ApiError, getPublicCatalog, type PublicCatalog } from '@/lib/api';
+import { isTenantSuspended } from '@/lib/tenant-rules';
 import { productsForCategory, visibleCategories } from '@/lib/catalog-rules';
 import { formatPrice } from '@/lib/format-price';
 
 const PAD = 20;
 
-type Result = { key: string; catalog?: PublicCatalog; notFound?: boolean };
+type Result = { key: string; catalog?: PublicCatalog; notFound?: boolean; suspended?: boolean };
 
 export default function CatalogScreen() {
   const router = useRouter();
@@ -49,6 +50,7 @@ export default function CatalogScreen() {
           setResult({
             key,
             notFound: e instanceof ApiError && (e.code === 'STORE_NOT_FOUND' || e.status === 404),
+            suspended: isTenantSuspended(e),
           }),
       );
     return () => {
@@ -65,6 +67,14 @@ export default function CatalogScreen() {
   let body;
   if (!loaded) {
     body = <FeedbackState type="loading" title="Cargando catálogo..." message="Un momento." />;
+  } else if (loaded.suspended) {
+    body = (
+      <FeedbackState
+        type="error"
+        title="Estamos en mantenimiento"
+        message="Este local no está disponible por el momento. Volvé a intentar más tarde."
+      />
+    );
   } else if (loaded.notFound) {
     body = (
       <FeedbackState

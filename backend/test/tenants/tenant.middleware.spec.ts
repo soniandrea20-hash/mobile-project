@@ -1,4 +1,4 @@
-import { NotFoundException } from '@nestjs/common';
+import { NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { TenantMiddleware } from 'src/tenants/api/tenant.middleware';
 
 describe('TenantMiddleware', () => {
@@ -52,10 +52,22 @@ describe('TenantMiddleware', () => {
     await expect(run('nope.localhost')).rejects.toBeInstanceOf(NotFoundException);
   });
 
-  it('404 TENANT_NOT_FOUND when the tenant is inactive', async () => {
-    repository.findBySlug.mockResolvedValue({ ...tenant, is_active: false });
-    await expect(run('local1.localhost')).rejects.toMatchObject({
-      response: { code: 'TENANT_NOT_FOUND' },
+  describe('suspended tenant (is_active = false)', () => {
+    beforeEach(() => repository.findBySlug.mockResolvedValue({ ...tenant, is_active: false }));
+
+    it.each(['/stores', '/public/stores/x/catalog', '/orders', '/auth/login', '/auth/register'])(
+      '503 TENANT_SUSPENDED on %s',
+      async (path) => {
+        const error = await run('local1.localhost', {}, path).catch((e) => e);
+        expect(error).toBeInstanceOf(ServiceUnavailableException);
+        expect(error.getResponse()).toMatchObject({ statusCode: 503, code: 'TENANT_SUSPENDED' });
+      },
+    );
+
+    it('the admin host is unaffected', async () => {
+      const { req, next } = await run('admin.localhost', {}, '/tenants');
+      expect(req.platformAdmin).toBe(true);
+      expect(next).toHaveBeenCalled();
     });
   });
 

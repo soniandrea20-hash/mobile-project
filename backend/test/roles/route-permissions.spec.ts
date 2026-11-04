@@ -55,4 +55,8 @@ describe('Permisos requeridos por ruta', () => {
       expect(codes!.some((c) => EMPLOYEE.includes(c))).toBe(false);
     }
   });
+
+  it.each(['suspend', 'reactivate'])('TenantsController.%s exige tenants:update (solo root)', (name) => {
+    expect(Reflect.getMetadata(PERMISSIONS_KEY, TenantsController.prototype[name as 'suspend'])).toEqual(['tenants:update']);
+  });
 });

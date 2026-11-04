@@ -4,6 +4,7 @@ import { SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { StoreHeader } from '@/components/store-header';
 import { Button } from '@/components/ui/mostrador/button';
+import { FeedbackState } from '@/components/ui/mostrador/feedback-state';
 import { Card } from '@/components/ui/mostrador/card';
 import { TextField } from '@/components/ui/mostrador/text-field';
 import { Colors, Fonts, Radius, Spacing } from '@/components/ui/mostrador/tokens';
@@ -13,6 +14,7 @@ import { formatCents } from '@/lib/format-price';
 import { saveLastOrder } from '@/lib/last-order';
 import { loadSourceScreen } from '@/lib/source-screen';
 import { buildOrderInput, MAX_NAME, MAX_NOTE } from '@/lib/order-rules';
+import { isTenantSuspended } from '@/lib/tenant-rules';
 import { createSubmitLock } from '@/lib/submit-lock';
 
 export default function ConfirmScreen() {
@@ -25,6 +27,7 @@ export default function ConfirmScreen() {
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reviewCart, setReviewCart] = useState(false);
+  const [suspended, setSuspended] = useState(false);
   const [lock] = useState(createSubmitLock);
 
   if (lines.length === 0 && !sent) return <Redirect href={`/${storeSlug}/cart`} />;
@@ -42,7 +45,9 @@ export default function ConfirmScreen() {
       router.replace(`/${storeSlug}/done`);
       clearCart();
     } catch (e) {
-      if (e instanceof ApiError && e.code === 'PRODUCTS_UNAVAILABLE') {
+      if (isTenantSuspended(e)) {
+        setSuspended(true);
+      } else if (e instanceof ApiError && e.code === 'PRODUCTS_UNAVAILABLE') {
         const names = e.unavailableNames.length ? `: ${e.unavailableNames.join(', ')}` : '';
         setError(`Algunos productos ya no están disponibles${names}. Revisá tu pedido.`);
         setReviewCart(true);
@@ -55,6 +60,21 @@ export default function ConfirmScreen() {
       lock.release();
     }
   };
+
+  if (suspended) {
+    return (
+      <SafeAreaView style={styles.screen}>
+        <StoreHeader title="Mantenimiento" store={storeName ?? storeSlug} />
+        <View style={styles.content}>
+          <FeedbackState
+            type="error"
+            title="Estamos en mantenimiento"
+            message="Este local no está disponible por el momento. Volvé a intentar más tarde."
+          />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.screen}>

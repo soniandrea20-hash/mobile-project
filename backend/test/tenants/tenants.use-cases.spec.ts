@@ -2,6 +2,7 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { CreateTenantUseCase } from 'src/tenants/application/create.use-case';
 import { GetAllTenantsUseCase } from 'src/tenants/application/get-all.use-case';
 import { UpdateTenantUseCase } from 'src/tenants/application/update.use-case';
+import { SetTenantActiveUseCase } from 'src/tenants/application/set-active.use-case';
 
 const row = { tenant_id: 't1', name: 'Acme', slug: 'acme', is_active: true, created_at: new Date() };
 
@@ -82,6 +83,27 @@ describe('Tenants use cases', () => {
       const error = await useCase().execute('t1', { is_active: true }).catch((e) => e);
 
       expect(error).toBeInstanceOf(NotFoundException);
+      expect(error.getResponse()).toMatchObject({ code: 'TENANT_NOT_FOUND' });
+    });
+  });
+
+  describe('SetActive (suspend / reactivate)', () => {
+    const useCase = () => new SetTenantActiveUseCase(tenantRepository as any);
+
+    it.each([[false], [true]])('sets is_active = %s', async (active) => {
+      tenantRepository.update.mockResolvedValue({ ...row, is_active: active });
+
+      const result = await useCase().execute('t1', active);
+
+      expect(tenantRepository.update).toHaveBeenCalledWith('t1', { is_active: active });
+      expect(result.is_active).toBe(active);
+    });
+
+    it('404 TENANT_NOT_FOUND si no existe', async () => {
+      tenantRepository.update.mockResolvedValue(null);
+
+      const error = await useCase().execute('t1', false).catch((e) => e);
+
       expect(error.getResponse()).toMatchObject({ code: 'TENANT_NOT_FOUND' });
     });
   });

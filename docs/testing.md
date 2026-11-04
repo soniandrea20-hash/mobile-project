@@ -979,6 +979,24 @@ Manual (backend corriendo, base con `db:apply` sin la semilla de desarrollo, `BA
 
 Pending: supertest con base para la concurrencia del primer registro y el alta transaccional (TC-001, TC-003, TC-129).
 
+### Comercios suspendidos (R2, RF-035)
+
+Automated (`backend/test`):
+- `tenants/tenant.middleware.spec.ts`: tenant existente con `is_active = false` responde 503 `TENANT_SUSPENDED` en `/stores`, `/public/...`, `/orders`, `/auth/login` y `/auth/register`; slug inexistente sigue en 404 `TENANT_NOT_FOUND` y el contexto `admin` no se ve afectado (TC-005, TC-075).
+- `tenants/tenants.use-cases.spec.ts`: `SetTenantActiveUseCase` pone `is_active` en `false` o `true` y da 404 `TENANT_NOT_FOUND` si no existe (TC-005, TC-006).
+- `roles/route-permissions.spec.ts`: `suspend` y `reactivate` exigen `tenants:update`, que el dueño y el empleado no tienen; `root` pasa el guard sin permisos (TC-007).
+
+Manual (backend corriendo, archivo `backend/http/01-admin/admin.http`):
+- Root: `POST /tenants/:id/suspend` devuelve 200 con `is_active: false`; luego `GET /stores` con `X-Tenant-Slug: <tenant>` y `POST /auth/login` con ese slug dan 503 `TENANT_SUSPENDED`; con `X-Tenant-Slug: admin` el Root sigue operando (TC-005).
+- Root: `POST /tenants/:id/reactivate` devuelve 200 con `is_active: true` y el login del dueño vuelve a funcionar (TC-006).
+- Dueño: `POST /tenants/:id/suspend` y `POST /tenants` responden 403 (TC-007). Un uuid inválido da 400; uno inexistente, 404.
+
+Mobile (`mobile/src/lib/tenant-rules.test.ts`): `isTenantSuspended` solo reconoce 503 `TENANT_SUSPENDED`; `validateNewTenant` exige los cinco campos, rechaza slugs inválidos o reservados, email inválido y nombre de más de 150 caracteres, y devuelve el cuerpo recortado; `tenantErrorMessage` mapea `SLUG_TAKEN`, `INVALID_SLUG`, `USER_NOT_FOUND`, 403 y sin conexión.
+
+Manual (app web): con el Root en `admin.<base>` el login muestra solo la pestaña Comercios (un usuario no Root nunca la ve): el listado muestra cada comercio; el interruptor suspende y reactiva (TC-005, TC-006); crear con slug repetido o reservado muestra el error de la API; un dueño sin registrar muestra "El dueño debe registrarse antes". Con el comercio suspendido, abrir `http://<slug>.<base>/<local>` muestra "Estamos en mantenimiento" (TC-075) y, si se suspende con el pedido armado, confirmar muestra la misma pantalla y no envía el pedido (TC-005). El login de ese comercio responde 503 y la pantalla muestra el error genérico de ingreso. Automatización Playwright de TC-005 y TC-075: pendiente.
+
+Pending: TC-180 (suspensión bajo carga) necesita k6 y staging; supertest con base para el efecto sobre pedidos en curso.
+
 ### Despliegue en Azure (`docs/deploy.md`)
 
 Manual / no funcional:
