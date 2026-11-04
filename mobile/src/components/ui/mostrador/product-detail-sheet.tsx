@@ -3,6 +3,7 @@ import { Image } from 'expo-image';
 import { useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { MAX_QUANTITY } from '@/lib/cart-rules';
 import { formatPrice } from '@/lib/format-price';
 
 import { Button } from './button';
@@ -47,7 +48,7 @@ export function ProductDetailSheet({ product, maxQuantity, onClose, onAdd }: Pro
       onRequestClose={onClose}
     >
       <View style={[styles.overlay, wide && styles.overlayWide]}>
-        <Pressable accessibilityLabel="Cerrar" style={StyleSheet.absoluteFill} onPress={onClose} />
+        <Pressable accessible={false} style={StyleSheet.absoluteFill} onPress={onClose} />
         {product ? (
           <View style={[styles.sheet, wide && styles.sheetWide]}>
             <ScrollView contentContainerStyle={styles.content}>
@@ -67,7 +68,7 @@ export function ProductDetailSheet({ product, maxQuantity, onClose, onAdd }: Pro
               {product.description ? <Text style={styles.description}>{product.description}</Text> : null}
               <Text style={styles.price}>{formatPrice(product.price)}</Text>
               {atMax ? (
-                <Text style={styles.max}>Ya tenés el máximo de este producto (50).</Text>
+                <Text style={styles.max}>Ya tenés el máximo de este producto ({MAX_QUANTITY}).</Text>
               ) : null}
             </ScrollView>
 
