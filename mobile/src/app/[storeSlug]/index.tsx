@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   FlatList,
   SafeAreaView,
@@ -15,10 +15,12 @@ import { Button } from '@/components/ui/mostrador/button';
 import { Chip } from '@/components/ui/mostrador/chip';
 import { FeedbackState } from '@/components/ui/mostrador/feedback-state';
 import { ProductCard } from '@/components/ui/mostrador/product-card';
+import { ProductDetailSheet } from '@/components/ui/mostrador/product-detail-sheet';
 import { Colors, Fonts, Radius, Spacing } from '@/components/ui/mostrador/tokens';
 import { useWide } from '@/components/ui/mostrador/use-wide';
 import { useCart } from '@/context/CartContext';
-import { ApiError, getPublicCatalog, type PublicCatalog } from '@/lib/api';
+import { ApiError, getPublicCatalog, type PublicCatalog, type PublicProduct } from '@/lib/api';
+import { MAX_QUANTITY } from '@/lib/cart-rules';
 import { isTenantSuspended } from '@/lib/tenant-rules';
 import { productsForCategory, visibleCategories } from '@/lib/catalog-rules';
 import { formatPrice } from '@/lib/format-price';
@@ -30,7 +32,7 @@ type Result = { key: string; catalog?: PublicCatalog; notFound?: boolean; suspen
 export default function CatalogScreen() {
   const router = useRouter();
   const { storeSlug } = useLocalSearchParams<{ storeSlug: string }>();
-  const { addProduct, itemCount, totalCents } = useCart();
+  const { addProduct, itemCount, totalCents, lines } = useCart();
   const columns = useWide() ? 3 : 1;
 
   // Loading is derived from the key, so the effect never sets state synchronously.
@@ -38,6 +40,19 @@ export default function CatalogScreen() {
   const [result, setResult] = useState<Result | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [capReached, setCapReached] = useState(false);
+  const [selected, setSelected] = useState<PublicProduct | null>(null);
+  const inCart = lines.find((l) => l.productId === selected?.product_id)?.quantity ?? 0;
+  // Memoized so the sheet's reset effect does not fire on every catalog render.
+  const detail = useMemo(
+    () =>
+      selected && {
+        name: selected.name,
+        description: selected.description,
+        price: selected.price,
+        imageUrl: selected.image_url,
+      },
+    [selected],
+  );
   const key = `${storeSlug}:${attempt}`;
 
   useEffect(() => {
@@ -62,7 +77,7 @@ export default function CatalogScreen() {
   const categories = visibleCategories(loaded?.catalog?.categories ?? []);
   const selectedId = (categories.find((c) => c.category_id === activeId) ?? categories[0])?.category_id;
 
-  const add = (product: Parameters<typeof addProduct>[0]) => setCapReached(!addProduct(product));
+  const add = (product: PublicProduct, quantity = 1) => setCapReached(!addProduct(product, quantity));
 
   let body;
   if (!loaded) {
@@ -139,6 +154,7 @@ export default function CatalogScreen() {
                 price={formatPrice(item.price)}
                 imageUrl={item.image_url}
                 onAdd={() => add(item)}
+                onPress={() => setSelected(item)}
               />
             </View>
           )}
@@ -165,6 +181,16 @@ export default function CatalogScreen() {
           onPress={() => router.push(`/${storeSlug}/cart`)}
         />
       </View>
+
+      <ProductDetailSheet
+        product={detail}
+        maxQuantity={MAX_QUANTITY - inCart}
+        onClose={() => setSelected(null)}
+        onAdd={(q) => {
+          if (selected) add(selected, q);
+          setSelected(null);
+        }}
+      />
     </SafeAreaView>
   );
 }

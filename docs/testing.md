@@ -1032,7 +1032,13 @@ Manual / no funcional:
 - Límite: al agregar un producto distinto número 51 aparece el mensaje en línea "El pedido admite hasta 50 productos distintos." (sin `Alert`, visible en web).
 - Estados: cargando muestra "Cargando catálogo..."; con la API apagada, "No pudimos cargar el catálogo" y "Reintentar" recarga; `belgrano` (sin productos) muestra "Todavía no hay productos disponibles"; `/inexistente` muestra "No encontramos este local" sin botón de reintento.
 - Layout web: a 360 px de ancho no hay scroll horizontal de la página (solo la fila de chips se desplaza); en escritorio el contenido queda centrado con un ancho máximo de 480 px.
-- Detalle de producto: no existe pantalla de detalle; ningún requerimiento (HU-16 a HU-20) lo pide.
+- Detalle de producto: tocar la card (fuera del "+") abre el detalle con imagen grande, descripción completa y precio; en mobile es un panel inferior y en escritorio (≥ 900 px) un diálogo centrado de 520 px.
+- Detalle, agregar: la cantidad arranca en 1; con el stepper en 3, el botón dice "Agregar · $3×precio" y al tocarlo se cierra el detalle y "Ver carrito" suma 3 unidades.
+- Detalle, "+" directo: el "+" de la card suma 1 sin abrir el detalle.
+- Detalle, cierre: la X, tocar el fondo y Esc (web) o atrás (Android) cierran sin agregar nada. En web el "atrás" del navegador no cierra el detalle (limitación aceptada).
+- Detalle, tope: con 48 unidades del producto en el carrito el stepper no pasa de 2; con 50, el botón está deshabilitado y aparece "Ya tenés el máximo de este producto (50)."
+- Detalle, tope de distintos: con 50 productos distintos, agregar uno nuevo desde el detalle cierra el panel y muestra "El pedido admite hasta 50 productos distintos."
+- Detalle sin imagen ni descripción: se ve el ícono de imagen naranja y no queda un bloque vacío.
 - Pendiente: la pantalla no se contrastó contra el Figma SO-01 (límite de llamadas de la API de Figma).
 
 ### Carrito, confirmación y pedido registrado (SO-02, SO-03, SO-04, HU-18, HU-19, RF-027 a RF-029, RF-034)

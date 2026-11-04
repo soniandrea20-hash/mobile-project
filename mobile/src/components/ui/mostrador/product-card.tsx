@@ -10,6 +10,7 @@ type ProductCardProps = {
   price: string;
   imageUrl?: string | null;
   onAdd: () => void;
+  onPress?: () => void;
 };
 
 const ADD_SIZE = 32;
@@ -20,9 +21,16 @@ export function ProductCard({
   price,
   imageUrl,
   onAdd,
+  onPress,
 }: ProductCardProps) {
   return (
-    <View style={styles.card}>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Ver ${name}`}
+      onPress={onPress}
+      disabled={!onPress}
+      style={styles.card}
+    >
       <View style={styles.image}>
         {imageUrl ? (
           <Image
@@ -58,7 +66,7 @@ export function ProductCard({
           </Pressable>
         </View>
       </View>
-    </View>
+    </Pressable>
   );
 }
 
