@@ -28,7 +28,7 @@ One branch per requirement, stacked (each from the previous one) so they squash 
 - [x] T2 RF-035 tenant suspension: 503 `TENANT_SUSPENDED` for known inactive tenant (login included), `/tenants/:id/suspend` and `/reactivate`, maintenance screen in self-order, Root panel on admin host. Branch `feat/r2-tenants-root`. Route: delegated.
 - [x] T3 RNF-003 API response time: compression, k6 scripts (TC-112 and stress), index review. Target measurement pending infra. Branch `feat/r2-api-rendimiento`. Route: delegated.
 - [x] T4 RNF-002 self-order load: catalog cache headers, image resizing, Lighthouse CI config with budget (TC-184). Target measurement pending infra. Branch `feat/r2-selforder-carga`. Route: delegated.
-- [ ] T5 RNF-018 multiplatform backoffice: shared-code measurement script, CI workflow for web export and debug APK (TC-128). Build-time target pending CI run. Branch `feat/r2-backoffice-multiplataforma`. Route: delegated.
+- [x] T5 RNF-018 multiplatform backoffice: shared-code measurement script, CI workflow for web export and debug APK (TC-128). Build-time target pending CI run. Branch `feat/r2-backoffice-multiplataforma`. Route: delegated.
 
 ## Progress
 - Feature document created.
@@ -42,5 +42,7 @@ One branch per requirement, stacked (each from the previous one) so they squash 
 
 - T4 done: `38454f5` public catalog ETag + `Cache-Control: public, max-age=60, stale-while-revalidate=300` + 304; images already resized to 1280 px on upload (no change); Lighthouse config `perf/lighthouse/lighthouserc.json` (perf ≥ 0.8, LCP ≤ 2500, image ≤ 600 KB). Parent found a cross-tenant shared-cache risk (tenant via `X-Tenant-Slug`) → fix `b77a439` `Vary: X-Tenant-Slug` (RED 1 test, GREEN 68 products tests, tsc clean). Assessed high → verifier: no defects; stale catalog up to ~6 min is display-only (server re-prices orders). **Pending infra:** LCP / Lighthouse score not measured (web not published, no staging).
 
+- T5 done: `49a1fca` shared-code script `mobile/scripts/shared-code*.js` (95.04% shared, threshold 90), workflow `.github/workflows/mobile-build.yml` (test, shared-code, web export, debug APK via prebuild + gradle, 30 min timeouts); user's `mobile/app.json` (`android.package`) and `mobile/package.json` (`expo run:*`) included by user decision. RED observed, GREEN 18 suites / 186, tsc clean, web export OK (~30 s); parent re-ran shared-code. Assessed high → verifier: no defects. **Pending CI:** first workflow run (APK build and ≤ 30 min target unverified); `com.anonymous.mostrador` is a placeholder id.
+
 ## Next step
-T5 RNF-018.
+User decides squash of the stacked branches into `develop` (T1 → T5) and push. Still pending outside code: add `LOG_MODE`, `SERVICE_NAME`, `SERVICE_VERSION`, `APP_ENV` to `backend/.env.example` and `LOG_MODE=json` in the Container App; run k6 and Lighthouse once staging exists.

@@ -119,3 +119,8 @@ Todo corre en la máquina local. La web resuelve el comercio por subdominio (`*.
 3. Backend, desde `backend`: `npm run start:dev` (puerto 3000).
 4. Web, desde `mobile`: copiar `.env.example` a `.env` (opcional en web) y ejecutar `npx expo start --web --port 8081`.
 5. Abrir `http://local1.localhost:8081/palermo`. Para el comercio sin número: `http://local2.localhost:8081/centro`.
+
+### Código compartido y builds en CI (RNF-018)
+
+- `npm run shared-code` mide el porcentaje de código compartido entre Android y web (archivos de `src/` sin sufijo `.web`/`.android`/`.ios`/`.native`) y falla si es menor a 90% (umbral configurable: `node scripts/shared-code.js 85` o `SHARED_CODE_MIN`).
+- `.github/workflows/mobile-build.yml` corre tests, la medición, `expo export --platform web` y `expo prebuild` + `gradlew assembleDebug`. Cada build tiene `timeout-minutes: 30` y sube su artefacto (`web-dist`, `android-debug-apk`).

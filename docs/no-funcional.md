@@ -62,6 +62,8 @@ Convención de RNF-017: un solo evento por solicitud HTTP, en stdout, con el esq
 | --- | --- | --- | --- | --- |
 | RNF-018 | Backoffice multiplataforma | ≥ 90% del código compartido entre Android y web; builds de APK y web en ≤ 30 min en CI | Análisis de estructura del repositorio y tiempos de CI | Media |
 
+Convención de RNF-018: `npm run shared-code` (en `mobile`) cuenta líneas no vacías de `src/` sin tests; son específicos de plataforma los archivos con sufijo `.web`, `.android`, `.ios` o `.native`. El workflow `mobile-build.yml` lo ejecuta y arma el APK debug y el export web con tope de 30 min por job.
+
 ## Verificación y validación
 
 - **Verificación** ("¿construimos el producto correctamente?"): comprueba que cada RNF cumple su meta con las herramientas de la tabla (Lighthouse, k6/JMeter, Jest, Playwright, gitleaks). Se ejecuta en cada entrega y los resultados se registran en `docs/testing.md`.
