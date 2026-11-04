@@ -40,6 +40,29 @@ describe('cart rules', () => {
     expect(r.lines).toHaveLength(50);
   });
 
+  it('adds a quantity to a new line', () => {
+    expect(addLine([], product(1), 3).lines[0].quantity).toBe(3);
+  });
+
+  it('adds a quantity to an existing line', () => {
+    const lines = addLine([], product(1), 2).lines;
+    expect(addLine(lines, product(1), 4).lines[0].quantity).toBe(6);
+  });
+
+  it('caps the summed quantity at 50', () => {
+    const lines = addLine([], product(1), 45).lines;
+    expect(addLine(lines, product(1), 10).lines[0].quantity).toBe(50);
+    expect(addLine([], product(2), 80).lines[0].quantity).toBe(50);
+  });
+
+  it('rejects a quantity for the 51st distinct product', () => {
+    let lines: CartLine[] = [];
+    for (let i = 0; i < 50; i++) lines = addLine(lines, product(i)).lines;
+    const r = addLine(lines, product(99), 3);
+    expect(r.rejected).toBe(true);
+    expect(r.lines).toBe(lines);
+  });
+
   it('clamps set quantity to 1..50', () => {
     const lines = addLine([], product(1)).lines;
     expect(setQuantity(lines, 'p1', 0)[0].quantity).toBe(1);

@@ -31,7 +31,7 @@ type CartContextValue = {
   /** Scopes the cart to a store and restores its saved lines. Call from the store route. */
   bindStore: (storeSlug: string) => void;
   /** Returns false when the 50-product cap rejected the product. */
-  addProduct: (product: PublicProduct) => boolean;
+  addProduct: (product: PublicProduct, quantity?: number) => boolean;
   setQuantity: (productId: string, quantity: number) => void;
   removeItem: (productId: string) => void;
   clearCart: () => void;
@@ -78,8 +78,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const addProduct = useCallback(
-    (product: PublicProduct) => {
-      const result = addLine(lines, product);
+    (product: PublicProduct, quantity = 1) => {
+      const result = addLine(lines, product, quantity);
       setLines(result.lines);
       return !result.rejected;
     },

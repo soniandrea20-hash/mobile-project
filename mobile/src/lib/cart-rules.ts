@@ -18,10 +18,14 @@ type CatalogProduct = {
   image_url: string | null;
 };
 
-export function addLine(lines: CartLine[], product: CatalogProduct): { lines: CartLine[]; rejected: boolean } {
+export function addLine(
+  lines: CartLine[],
+  product: CatalogProduct,
+  quantity = 1,
+): { lines: CartLine[]; rejected: boolean } {
   const existing = lines.find((l) => l.productId === product.product_id);
   if (existing) {
-    return { lines: setQuantity(lines, existing.productId, existing.quantity + 1), rejected: false };
+    return { lines: setQuantity(lines, existing.productId, existing.quantity + quantity), rejected: false };
   }
   if (lines.length >= MAX_LINES) return { lines, rejected: true };
   const line: CartLine = {
@@ -29,7 +33,7 @@ export function addLine(lines: CartLine[], product: CatalogProduct): { lines: Ca
     name: product.name,
     priceCents: Math.round(Number(product.price) * 100),
     imageUrl: product.image_url,
-    quantity: 1,
+    quantity: clamp(Math.round(quantity), 1, MAX_QUANTITY),
   };
   return { lines: [...lines, line], rejected: false };
 }
