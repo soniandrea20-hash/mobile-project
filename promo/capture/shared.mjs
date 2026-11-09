@@ -75,7 +75,9 @@ export async function startScreencast(page, { dsf = 1, out } = {}) {
   const frames = []; // { file, ts } in seconds
   const writes = [];
   const cdp = await page.context().newCDPSession(page);
+  let stopped = false; // frames still in flight after stop() must not write into the removed temp dir
   cdp.on('Page.screencastFrame', ({ data, metadata, sessionId }) => {
+    if (stopped) return;
     const file = `f${String(frames.length).padStart(6, '0')}.jpg`;
     frames.push({ file, ts: metadata.timestamp });
     writes.push(writeFile(join(dir, file), Buffer.from(data, 'base64')));
@@ -88,16 +90,29 @@ export async function startScreencast(page, { dsf = 1, out } = {}) {
     await page.waitForTimeout(50);
   }
 
+  // Time spent in skip() (spinners, real network latency) is cut out: the last frame before it is held until the first one after it.
+  const cuts = []; // [from, to] in seconds
+  const adj = (ts) => ts - cuts.reduce((sum, [a, b]) => sum + Math.max(0, Math.min(ts, b) - a), 0);
+
   return {
+    async skip(fn) {
+      const from = Date.now() / 1000;
+      await fn();
+      cuts.push([from, Date.now() / 1000]);
+    },
     async stop(file) {
       const end = Date.now() / 1000;
       await cdp.send('Page.stopScreencast');
+      stopped = true;
       await Promise.all(writes);
-      const lines = frames.map((f, i) => {
-        const next = i + 1 < frames.length ? frames[i + 1].ts : end;
-        return `file '${f.file}'\nduration ${Math.max(next - f.ts, 0.001).toFixed(4)}`;
+      // Frames inside a cut are dropped, except the last one of each cut: it is the settled state the page reached.
+      const lastIn = cuts.map(([a, b]) => frames.findLast((f) => f.ts > a && f.ts < b)).filter(Boolean);
+      const kept = frames.filter((f) => lastIn.includes(f) || !cuts.some(([a, b]) => f.ts > a && f.ts < b));
+      const lines = kept.map((f, i) => {
+        const next = i + 1 < kept.length ? kept[i + 1].ts : end;
+        return `file '${f.file}'\nduration ${Math.max(adj(next) - adj(f.ts), 0.001).toFixed(4)}`;
       });
-      lines.push(`file '${frames.at(-1).file}'`); // concat demuxer ignores the last duration unless the file is repeated
+      lines.push(`file '${kept.at(-1).file}'`); // concat demuxer ignores the last duration unless the file is repeated
       writeFileSync(join(dir, 'list.txt'), lines.join('\n'));
       mkdirSync(join(file, '..'), { recursive: true });
       execFileSync('ffmpeg', ['-loglevel', 'error', '-y', '-f', 'concat', '-i', join(dir, 'list.txt'),
@@ -106,4 +121,22 @@ export async function startScreencast(page, { dsf = 1, out } = {}) {
       rmSync(dir, { recursive: true, force: true });
     },
   };
+}
+
+// Creates (through the API, not recorded) a playlist holding the promo image, so scenes that need an
+// existing list start from it. Reuses the "Promo hamburguesa" media if an earlier scene already uploaded it.
+export async function createPromoList({ jwt, storeId }, name) {
+  const headers = { 'X-Tenant-Slug': 'local1', Authorization: `Bearer ${jwt}` };
+  const json = { ...headers, 'content-type': 'application/json' };
+  const library = await (await fetch(`${API}/content`, { headers })).json();
+  let media = library.find((m) => m.original_name.startsWith('Promo hamburguesa'));
+  if (!media) {
+    const { name: fileName, mimeType, buffer } = await promoImage(jwt, storeId);
+    const form = new FormData();
+    form.append('file', new Blob([buffer], { type: mimeType }), fileName);
+    media = await (await fetch(`${API}/content`, { method: 'POST', headers, body: form })).json();
+  }
+  const list = await (await fetch(`${API}/playlists`, { method: 'POST', headers: json, body: JSON.stringify({ name }) })).json();
+  await fetch(`${API}/playlists/${list.playlist_id}/items`, { method: 'PUT', headers: json, body: JSON.stringify({ items: [{ media_id: media.media_id, duration_seconds: 8 }] }) });
+  return list;
 }

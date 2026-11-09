@@ -2,7 +2,7 @@ import { chromium } from 'playwright';
 import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { DESKTOP, WEB, apiLogin, login, pause, phone, settle } from './shared.mjs';
+import { DESKTOP, WEB, apiLogin, createPromoList, login, pause, phone, settle } from './shared.mjs';
 
 const OUT = join(dirname(fileURLToPath(import.meta.url)), '..', 'stills');
 const filter = process.argv[2];
@@ -18,7 +18,13 @@ const groups = {
       await page.getByRole('button', { name: 'Bebidas' }).click();
       await shot('02-catalogo-categoria');
       await page.getByRole('button', { name: 'Hamburguesas' }).click();
-      for (const n of ['Clasica', 'Doble queso', 'Veggie']) await page.getByRole('button', { name: new RegExp(`^Agregar ${n}`) }).first().click();
+      await page.getByRole('button', { name: 'Ver Clasica' }).first().click();
+      await page.getByRole('button', { name: /^Agregar · / }).waitFor();
+      await shot('02b-detalle-producto');
+      await page.getByRole('button', { name: 'Agregar uno' }).click();
+      await page.getByRole('button', { name: /^Agregar · / }).click();
+      await page.getByRole('button', { name: /^Agregar · / }).waitFor({ state: 'hidden' });
+      for (const n of ['Doble queso', 'Veggie']) await page.getByRole('button', { name: new RegExp(`^Agregar ${n}`) }).first().click();
       await page.getByRole('button', { name: /Ver carrito · / }).click();
       await page.getByText('Tu pedido', { exact: true }).waitFor();
       await shot('03-carrito');
@@ -33,7 +39,7 @@ const groups = {
   },
   desktop: {
     context: { viewport: DESKTOP, deviceScaleFactor: 2 },
-    async run(page, shot) {
+    async run(page, shot, ctx) {
       await login(page, { submit: false });
       await shot('10-login');
       await page.getByRole('button', { name: 'Ingresar' }).click();
@@ -57,11 +63,22 @@ const groups = {
       await page.getByLabel('Precio').fill('8900');
       await shot('14-producto-nuevo');
       await page.goto(`${WEB}/admin/pantallas`);
-      await page.getByText('Abrí este enlace en el navegador del televisor').waitFor();
+      await page.getByRole('button', { name: /^Sala central/ }).waitFor();
+      await page.getByText('Ahora: ...').waitFor({ state: 'hidden' });
       await shot('15-pantallas');
-      await page.getByRole('button', { name: 'Contenido de pantalla' }).click();
-      await page.getByText('Se reproduce en este orden').waitFor();
-      await shot('16-contenido');
+      await page.getByRole('button', { name: 'Listas', exact: true }).click();
+      await page.getByRole('button', { name: '+ Nueva lista' }).waitFor();
+      await shot('16-listas');
+      const promo = await createPromoList(ctx, 'Promo del día');
+      await page.goto(`${WEB}/admin/pantallas/lista/${promo.playlist_id}`);
+      await page.getByText('Promo hamburguesa.png').first().waitFor();
+      await shot('16b-lista');
+      await createPromoList(ctx, 'Desayunos');
+      await page.goto(`${WEB}/admin/pantallas`);
+      await page.getByRole('button', { name: /^Sala central/ }).click();
+      await page.getByRole('button', { name: '+ Agregar horario' }).click();
+      await page.getByRole('dialog').getByRole('button', { name: 'Desayunos' }).click();
+      await shot('16c-horario', { quick: true });
       await page.goto(`${WEB}/admin/ajustes`);
       await page.waitForFunction(() => [...document.querySelectorAll('input')].some((i) => i.value));
       await shot('17-ajustes');
@@ -78,7 +95,7 @@ const groups = {
 };
 
 mkdirSync(OUT, { recursive: true });
-const { jwt, screenToken } = await apiLogin();
+const { jwt, screenToken, storeId } = await apiLogin();
 const browser = await chromium.launch();
 let taken = 0;
 
@@ -86,16 +103,17 @@ for (const [name, group] of Object.entries(groups)) {
   const context = await browser.newContext(group.context);
   if (name !== 'desktop') await context.addInitScript((t) => window.localStorage.setItem('mostrador.token', t), jwt);
   const page = await context.newPage();
-  const shot = async (file) => {
+  const shot = async (file, { quick = false } = {}) => {
     if (filter && !file.includes(filter)) return;
-    await settle(page);
+    if (quick) await pause(page, 1000); // the open sheet never reports every <img> complete
+    else await settle(page);
     await page.evaluate(() => document.activeElement?.blur?.());
     await page.screenshot({ path: join(OUT, `${file}.png`) }); // caret hidden by default
     taken++;
     console.log(`ok ${file}`);
   };
   try {
-    await group.run(page, shot, screenToken);
+    await group.run(page, shot, name === 'desktop' ? { jwt, storeId } : screenToken);
   } finally {
     await context.close();
   }

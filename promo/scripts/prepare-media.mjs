@@ -10,8 +10,8 @@ const files = [
   'scenes/s4-confirmar.mp4',
   'scenes/s5-ordenes.mp4',
   'scenes/s6-catalogo.mp4',
-  'scenes/s7a-contenido.mp4',
-  'scenes/s7b-player.mp4',
+  'scenes/s7a-lista.mp4',
+  'scenes/s7c-horario.mp4',
 ];
 for (const f of files) {
   if (!existsSync(f)) {

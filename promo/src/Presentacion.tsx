@@ -21,15 +21,21 @@ import { Logo } from './Logo';
 import { Colors, Fonts, TRANSITION } from './theme';
 
 // Section lengths in frames (30 fps). Each section overlaps the next by TRANSITION frames.
+// Total stays ~71 s so ai/musica.mp3 (71.4 s) fits.
+const S3 = 352; // s3-autopedido 11.73 s
+const LISTA = 246; // s7a-lista 8.2 s
+const HORARIO = 240; // s7c-horario 8.8 s at 1.1x
+const TV = 135;
+const SLIDE = 18;
 const D = {
-  intro: 150,
-  problema: 177,
-  autopedido: 332 + 145, // s3 (11.07 s) + s4 (4.83 s), back to back
-  ordenes: 364, // s5 12.13 s
-  catalogo: 305, // s6 11.67 s at 1.15x
-  pantallas: 193 + 225 - 18, // s7a, slide, s7b
-  cierre: 195,
-  outro: 150,
+  intro: 135,
+  problema: 150,
+  autopedido: S3 + 128, // s3 + s4 (4.27 s), back to back
+  ordenes: 329, // s5 12.07 s at 1.1x
+  catalogo: 242, // s6 8.07 s
+  pantallas: LISTA + HORARIO + TV - 2 * SLIDE,
+  cierre: 165,
+  outro: 140,
 };
 export const DURATION = Object.values(D).reduce((a, b) => a + b, 0) - TRANSITION * (Object.keys(D).length - 1);
 
@@ -137,15 +143,16 @@ const Autopedido: React.FC = () => (
     <div style={{ position: 'absolute', left: 330, top: 100 }}>
       <Phone height={900}>
         <Screen src="scenes/s3-autopedido.mp4" />
-        <Sequence from={332} layout="none">
+        <Sequence from={S3} layout="none">
           <Screen src="scenes/s4-confirmar.mp4" />
         </Sequence>
       </Phone>
     </div>
     <div style={{ position: 'absolute', left: 1000, top: 270, width: 780, display: 'flex', flexDirection: 'column', gap: 34 }}>
-      <Callout from={10} dimAt={95} step={1}>Escaneá el QR de la mesa</Callout>
-      <Callout from={95} dimAt={340} step={2}>Armá tu pedido</Callout>
-      <Callout from={340} step={3}>Confirmá sin esperar</Callout>
+      <Callout from={10} dimAt={100} step={1}>Escaneá el QR de la mesa</Callout>
+      <Callout from={100} dimAt={225} step={2}>Elegí la cantidad</Callout>
+      <Callout from={225} dimAt={S3} step={3}>Armá tu pedido</Callout>
+      <Callout from={S3} step={4}>Confirmá sin esperar</Callout>
     </div>
   </AbsoluteFill>
 );
@@ -197,12 +204,12 @@ const Desktop: React.FC<{ label: string; zoom: number | ((f: number) => number);
 };
 
 const Ordenes: React.FC = () => (
-  <Desktop label="Backoffice" src="scenes/s5-ordenes.mp4" zoom={1.9}>
-    <Callout from={12} dimAt={150}>Los pedidos entran al instante</Callout>
-    <Callout from={150}>
+  <Desktop label="Backoffice" src="scenes/s5-ordenes.mp4" rate={1.1} zoom={1.9}>
+    <Callout from={10} dimAt={137}>Los pedidos entran al instante</Callout>
+    <Callout from={137}>
       <div>
         Seguí cada estado
-        <Estados at={[0, 190, 280]} />
+        <Estados at={[0, 173, 255]} />
       </div>
     </Callout>
   </Desktop>
@@ -212,24 +219,29 @@ const Catalogo: React.FC = () => (
   <Desktop
     label="Backoffice"
     src="scenes/s6-catalogo.mp4"
-    rate={1.15}
     zoom={(f) => interpolate(f, [30, 60], [1, 1.6], { ...clamp, easing: Easing.inOut(Easing.cubic) })}
   >
-    <Callout from={12} dimAt={150}>Cambiá precios y fotos en segundos</Callout>
-    <Callout from={150}>Sumá productos nuevos</Callout>
+    <Callout from={10} dimAt={105}>Cambiá precios y fotos en segundos</Callout>
+    <Callout from={105}>Sumá productos nuevos</Callout>
   </Desktop>
 );
 
-const PantallasLaptop: React.FC = () => (
-  <Desktop label="Pantallas" src="scenes/s7a-contenido.mp4" zoom={1.7}>
-    <Callout from={10} step={1}>Subí una promo</Callout>
+const PantallasLista: React.FC = () => (
+  <Desktop label="Pantallas" src="scenes/s7a-lista.mp4" zoom={1}>
+    <Callout from={10} step={1}>Armá listas para todas tus pantallas</Callout>
+  </Desktop>
+);
+
+const PantallasHorario: React.FC = () => (
+  <Desktop label="Pantallas" src="scenes/s7c-horario.mp4" rate={1.1} zoom={1}>
+    <Callout from={10} step={2}>Programá qué se ve y cuándo</Callout>
   </Desktop>
 );
 
 // Slow push-in so the still promo doesn't feel frozen on the TV.
 const PlayerImage: React.FC = () => {
   const frame = useCurrentFrame();
-  const scale = interpolate(frame, [0, 225], [1, 1.06], { extrapolateRight: 'clamp' });
+  const scale = interpolate(frame, [0, TV], [1, 1.06], { extrapolateRight: 'clamp' });
   return (
     <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', background: '#000' }}>
       <Img
@@ -249,18 +261,22 @@ const PantallasTv: React.FC = () => (
       </Tv>
     </div>
     <div style={{ position: 'absolute', left: 1330, top: 330, width: 520 }}>
-      <Callout from={10} step={2}>Aparece en todas tus pantallas</Callout>
+      <Callout from={10} step={3}>Aparece en todas tus pantallas</Callout>
     </div>
   </AbsoluteFill>
 );
 
 const Pantallas: React.FC = () => (
   <TransitionSeries>
-    <TransitionSeries.Sequence durationInFrames={193}>
-      <PantallasLaptop />
+    <TransitionSeries.Sequence durationInFrames={LISTA}>
+      <PantallasLista />
     </TransitionSeries.Sequence>
-    <TransitionSeries.Transition presentation={slide({ direction: 'from-right' })} timing={linearTiming({ durationInFrames: 18 })} />
-    <TransitionSeries.Sequence durationInFrames={225}>
+    <TransitionSeries.Transition presentation={slide({ direction: 'from-right' })} timing={linearTiming({ durationInFrames: SLIDE })} />
+    <TransitionSeries.Sequence durationInFrames={HORARIO}>
+      <PantallasHorario />
+    </TransitionSeries.Sequence>
+    <TransitionSeries.Transition presentation={slide({ direction: 'from-right' })} timing={linearTiming({ durationInFrames: SLIDE })} />
+    <TransitionSeries.Sequence durationInFrames={TV}>
       <PantallasTv />
     </TransitionSeries.Sequence>
   </TransitionSeries>

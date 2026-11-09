@@ -35,3 +35,7 @@ Video promocional de al menos 1 minuto que recorra la app completa (autopedido, 
 - Se regrabo todo con las fotos nuevas del catalogo.
 - Pendiente: el logo es provisorio (wordmark tipografico; los iconos de la app son los de Expo), falta el contenido de pantallas todavia muestra un UUID como nombre.
 - Musica: `promo/ai/musica.mp3` (Suno, 71 s, igual que el video) al 60 % con fades cortos.
+- Rama `feat/video-presentacion-v2`: el video se actualizo a la app nueva. Autopedido muestra el detalle de producto con cantidad (s3 y s4, still `02b-detalle-producto`). Pantallas muestra listas reutilizables (`s7a-lista`) y horarios (`s7c-horario`), y el TV sigue con `ai/pantalla-player.png`.
+- `reset_demo_orders.sql` ahora borra las listas "Promo del dia"/"Desayunos" (con sus items y horarios por cascada) y el medio "Promo hamburguesa" que crean las escenas; ya no toca `content_items` (tabla eliminada). Las listas y medios creados a mano no se tocan.
+- Las escenas de pantallas se graban a 960x540 @2x para que la UI llene el marco del laptop; `rec.skip()` recorta las esperas de red (spinners) del screencast.
+- Duracion final ~71 s (musica de 71.4 s): se aceleraron ordenes (1.2x) y catalogo (1.3x) y se acortaron intro, problema, cierre y outro para dar lugar a la seccion nueva.
