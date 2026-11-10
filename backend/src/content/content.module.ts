@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { blobContainer, blobEnabled } from 'src/media/blob-container';
+import { cloudinaryEnabled } from 'src/media/cloudinary-media';
 import { TenantsModule } from 'src/tenants/tenants.module';
 import { ContentController } from './api/content.controller';
 import { PlaylistsController } from './api/playlists.controller';
@@ -14,7 +14,7 @@ import { CONTENT_STORAGE, VIDEO_PROBE } from './application/ports/content-ports'
 import { CONTENT_REPOSITORY } from './domain/content.repository';
 import { PLAYLIST_REPOSITORY } from './domain/playlist.repository';
 import { FfprobeVideoProbe } from './infraestructure/ffprobe-video-probe';
-import { BlobContentStorage } from './infraestructure/blob-content-storage';
+import { CloudinaryContentStorage } from './infraestructure/cloudinary-content-storage';
 import { LocalContentStorage } from './infraestructure/local-content-storage';
 import { PostgreContentRepository } from './infraestructure/postgre-content.repository';
 import { PostgrePlaylistRepository } from './infraestructure/postgre-playlist.repository';
@@ -27,7 +27,7 @@ import { PostgrePlaylistRepository } from './infraestructure/postgre-playlist.re
     { provide: PLAYLIST_REPOSITORY, useClass: PostgrePlaylistRepository },
     {
       provide: CONTENT_STORAGE,
-      useFactory: () => (blobEnabled() ? new BlobContentStorage(blobContainer()) : new LocalContentStorage()),
+      useFactory: () => (cloudinaryEnabled() ? new CloudinaryContentStorage() : new LocalContentStorage()),
     },
     { provide: VIDEO_PROBE, useClass: FfprobeVideoProbe },
     ListContentUseCase,

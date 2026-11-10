@@ -35,10 +35,10 @@ class RejectingModule implements NestModule {
   }
 }
 
-const createApp = async (module: any, dir?: string, blobBaseUrl?: string) => {
+const createApp = async (module: any, dir?: string, resolveUrl?: (path: string) => string) => {
   const moduleRef = await Test.createTestingModule({ imports: [module] }).compile();
   const app = moduleRef.createNestApplication<NestExpressApplication>();
-  if (dir) serveMedia(app, dir, blobBaseUrl);
+  if (dir) serveMedia(app, dir, resolveUrl);
   await app.init();
   return app;
 };
@@ -111,22 +111,22 @@ describe('GET /media/*', () => {
   });
 });
 
-describe('GET /media/* con Blob', () => {
+describe('GET /media/* con Cloudinary', () => {
   let app: NestExpressApplication;
-  const base = 'https://acct.blob.core.windows.net/media';
+  const resolve = (path: string) => `https://res.cloudinary.com/demo/image/upload${path}`;
 
   beforeAll(async () => {
-    app = await createApp(RejectingModule, './uploads-no-existe', base);
+    app = await createApp(RejectingModule, './uploads-no-existe', resolve);
   });
   afterAll(() => app.close());
 
   const get = (path: string) => request(app.getHttpServer()).get(path).redirects(0);
 
-  it('debe redirigir con 302 a la URL del blob sin pasar por el middleware de tenant', async () => {
+  it('debe redirigir con 302 a la URL que devuelve el resolver sin pasar por el middleware de tenant', async () => {
     const res = await get('/media/t1/products/a.png');
 
     expect(res.status).toBe(302);
-    expect(res.headers.location).toBe(`${base}/t1/products/a.png`);
+    expect(res.headers.location).toBe('https://res.cloudinary.com/demo/image/upload/t1/products/a.png');
   });
 
   it('debe dar 404 ante path traversal, incluso codificado, y ante ruta vacia', async () => {

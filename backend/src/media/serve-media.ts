@@ -14,11 +14,11 @@ const isSafePath = (path: string) => {
 };
 
 // Express middleware runs before Nest routing, so TenantMiddleware and guards never see /media.
-// With blobBaseUrl the files live in Blob Storage and /media redirects there; otherwise they are served from dir.
-export const serveMedia = (app: NestExpressApplication, dir: string, blobBaseUrl?: string) => {
-  if (blobBaseUrl) {
+// With resolveUrl the files live in Cloudinary and /media redirects there; otherwise they are served from dir.
+export const serveMedia = (app: NestExpressApplication, dir: string, resolveUrl?: (path: string) => string) => {
+  if (resolveUrl) {
     app.use('/media', (req, res) =>
-      isSafePath(req.path) ? res.redirect(302, `${blobBaseUrl}${req.path}`) : notFound(res),
+      isSafePath(req.path) ? res.redirect(302, resolveUrl(req.path)) : notFound(res),
     );
     return;
   }

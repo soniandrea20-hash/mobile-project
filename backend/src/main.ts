@@ -3,7 +3,7 @@ import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { serveMedia } from './media/serve-media';
-import { mediaBaseUrl } from './media/blob-container';
+import { cloudinaryEnabled, cloudinaryUrl } from './media/cloudinary-media';
 import { uploadsDir } from './media/uploads-dir';
 import { logger } from './logging/app-logger';
 import { setupLogging } from './logging/setup-logging';
@@ -13,7 +13,7 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { logger });
   setupLogging(app, logger);
   setupCompression(app);
-  serveMedia(app, uploadsDir(), mediaBaseUrl());
+  serveMedia(app, uploadsDir(), cloudinaryEnabled() ? cloudinaryUrl : undefined);
 
   app.useGlobalPipes(
     new ValidationPipe({

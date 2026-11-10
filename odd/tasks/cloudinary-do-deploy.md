@@ -1,0 +1,43 @@
+# Cloudinary storage + DigitalOcean deploy
+
+Branch: `feat/cloudinary-do-deploy` (from `feat/video-presentacion-v2` @ 106d8ea; stacks on it because `main` lacks the media/content code). Worktree: `../mobile-project-worktrees/cloudinary-do-deploy`.
+
+## Objective
+Store uploaded media (product images, screen content) in Cloudinary instead of Azure Blob, and deploy the backend to DigitalOcean App Platform from GitHub (deploy on push to `main`).
+
+## Why
+User decision (2026-11-09): "storage: cloudinary, deploy: digital ocean desde github". The work Azure tenant may block app registrations/role assignments needed for OIDC; App Platform deploys from the GitHub integration without cloud credentials in CI.
+
+## Scope
+- In:
+  - Cloudinary adapters for `IImageStorage` and `IContentStorage`; Azure Blob adapters and `@azure/storage-blob` are removed. Local adapters stay for dev.
+  - One function in `src/media` decides the backend (`CLOUDINARY_URL` set → Cloudinary, otherwise local); content.module, products.module and main.ts all use it.
+  - `/media/*` keeps the public contract (302 redirect, same stored relative paths, no mobile change) via a path → URL resolver.
+  - Postgres TLS compatible with DO Managed PostgreSQL (its CA is not publicly trusted).
+  - App Platform app spec, CI workflow reduced to tests, `docs/deploy.md` rewritten, `docs/testing.md` cases.
+- Out: mobile build/distribution, wildcard tenant domains/certificates (documented as gap), CDN, signed/private media.
+
+## Constraints
+- TDD: on (global CLAUDE.md, strict). Runner from `backend/`: `npm test` (jest); typecheck `npx tsc --noEmit -p tsconfig.json`.
+- DB changes only via idempotent SQL scripts (none expected).
+- `backend/.env.example` is behind a deny rule: the user adds `CLOUDINARY_URL=` by hand.
+- Size limits: app caps images at 5 MB and videos at 50 MB; Cloudinary free plan caps (image 10 MB, video 100 MB) are above them — confirm on the real plan.
+- RDD: not run here (follows global switch).
+
+## Tasks
+- [x] T1 Cloudinary storage: resolver + adapters + single backend selector, remove Azure Blob, tests, `docs/testing.md`. Route: delegated (writer trigger, 2+ non-trivial files).
+- [ ] T2 DB TLS for DO Managed PostgreSQL (CA cert via env) in app and `db:apply`, tests. Route: delegated (same writer).
+- [ ] T3 App Platform spec (`.do/app.yaml`), workflow tests-only, `docs/deploy.md` rewrite. Route: delegated (same writer).
+
+## Acceptance criteria
+- With `CLOUDINARY_URL` set, uploads go to Cloudinary and `/media/<path>` redirects to the right `image/upload` or `video/upload` URL; deletes use the matching `resource_type`.
+- Without it, local disk works as today.
+- `npm test` and `tsc --noEmit` pass; no `@azure/*` import remains.
+- Pushing to `main` deploys on App Platform (manual one-time setup documented).
+
+## Progress
+- Feature doc created.
+- T1 done: `src/media/cloudinary-media.ts` (selector `cloudinaryEnabled`, `cloudinaryUrl`, `uploadMedia`, `removeMedia`), Cloudinary adapters, `serveMedia(app, dir, resolveUrl)`, Azure removed. RED observed (modules missing) then GREEN. Verification (backend/): `tsc --noEmit` OK; `npm test` 41 suites / 373 tests pass; `grep @azure src scripts package.json` empty. User must add `CLOUDINARY_URL=` to `backend/.env.example`.
+
+## Next step
+T2.
