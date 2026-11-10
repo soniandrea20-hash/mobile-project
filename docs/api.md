@@ -69,6 +69,8 @@ Errores comunes a todas las rutas del backoffice (no se repiten en cada endpoint
 
 Códigos de error de R1: `TENANT_NOT_FOUND`, `NOT_A_MEMBER`, `STORE_NOT_FOUND`, `SCREEN_NOT_FOUND`, `CONTENT_NOT_FOUND`, `CONTENT_LIST_MISMATCH`, `DURATION_NOT_ALLOWED`, `EMPTY_UPDATE`, `CATEGORY_NAME_TAKEN`, `CATEGORY_HAS_PRODUCTS`, `PRODUCT_LIMIT_REACHED`, `PRODUCTS_UNAVAILABLE`, `INVALID_STATUS_TRANSITION`, `MEDIA_TOO_LARGE`, `UNSUPPORTED_MEDIA_TYPE`, `VIDEO_TOO_LONG`, `MEDIA_UNREADABLE`, `ADMIN_ALREADY_EXISTS`, `USER_NOT_FOUND`, `INVALID_SLUG`, `SLUG_TAKEN`, `TENANT_SUSPENDED` (503, R2).
 
+Códigos de error de R2 para el pedido por ubicación (RF-037): `OUT_OF_RANGE` (403), `LOCATION_REQUIRED` (422), `LOCATION_INACCURATE` (422).
+
 ### 1.5 Paginación, fechas y dinero
 
 - Solo `GET /orders` pagina: `?page=1&limit=20` (`page` ≥ 1; `limit` de 1 a 100, por defecto 20). Respuesta `{ "data": [...], "meta": { "page", "limit", "total" } }`. Las demás listas devuelven un arreglo JSON simple (catálogo hasta 200 productos por local, playlist y pantallas son pocas filas).
@@ -647,7 +649,7 @@ Audiencia: persona que escaneó el QR. Anónimo. Tenant por Host (`local1.mostra
 - Errores: 404 `TENANT_NOT_FOUND`; 404 `STORE_NOT_FOUND` (el local no existe, está desactivado o es de otro tenant; la web muestra la página de error).
 
 ### `POST /public/stores/:storeSlug/orders`
-- Auth: `@Public()`. RF-027, RF-028, RF-029, RF-030, RF-033, RF-034, HU-18, HU-19, HU-20, HU-23.
+- Auth: `@Public()`. RF-027, RF-028, RF-029, RF-030, RF-033, RF-034, RF-037, HU-18, HU-19, HU-20, HU-23, HU-25.
 - Request:
 
 ```json
@@ -655,7 +657,8 @@ Audiencia: persona que escaneó el QR. Anónimo. Tenant por Host (`local1.mostra
   "items": [ { "product_id": "7c2b…", "quantity": 2 }, { "product_id": "9a8b…", "quantity": 1 } ],
   "customer_name": "Ana",
   "note": "Sin hielo",
-  "source_screen_id": "d4e5…"
+  "source_screen_id": "d4e5…",
+  "location": { "latitude": -34.5875, "longitude": -58.4308, "accuracy": 18.5 }
 }
 ```
 
@@ -667,9 +670,13 @@ Audiencia: persona que escaneó el QR. Anónimo. Tenant por Host (`local1.mostra
 | `customer_name` | texto hasta **50** caracteres, opcional |
 | `note` | texto hasta **200** caracteres, opcional |
 | `source_screen_id` | UUID, opcional; el valor de `?src=` de la URL del QR. Si no existe, es de otro local/tenant o está desactivada, el pedido se guarda igual con origen `null` (no se bloquea al cliente) |
+| `location` | objeto opcional en el contrato, **obligatorio si el local tiene ubicación guardada** (RF-037, R2). Lo envía la web con la Geolocation API |
+| `location.latitude` / `location.longitude` | número; latitud de -90 a 90, longitud de -180 a 180 |
+| `location.accuracy` | número en metros, mayor o igual a 0 |
 
 - **Los precios no se envían ni se confían (integridad del pedido, RNF-001).** Cualquier `price`, `unit_price` o `total` que llegue en el body se descarta. El servidor, en una sola transacción: verifica que cada producto exista en el local y esté disponible; lee el precio vigente; calcula `line_total` y `total`; incrementa `tenants.last_order_number` para obtener `order_number`; guarda `orders` y `order_items` con estado `generada`; y arma el mensaje de WhatsApp.
 - Se registra el pedido **aunque el local no tenga `whatsapp_number`** (RF-029, RF-030).
+- **Verificación de ubicación (RF-037, R2).** Si el local tiene ubicación guardada (RF-036), antes de guardar el servidor valida `location`: la precisión debe ser de `LOCATION_MAX_ACCURACY_M` (100 m) o mejor y la distancia (Haversine) entre `location` y la ubicación del local debe ser de `ORDER_MAX_DISTANCE_M` (100 m) o menos; a exactamente 100 m se acepta. Son constantes del servidor (valor propuesto), sin configuración por local. Si el local no tiene ubicación guardada, la verificación no se aplica y `location` se ignora. Las coordenadas se usan solo para la verificación: no se guardan en la orden ni se registran en logs. Limitación conocida: el GPS del cliente puede falsearse; el control disuade pedidos remotos, no garantiza presencia.
 - Respuesta **201**:
 
 ```json
@@ -696,6 +703,9 @@ En cada elemento de `whatsapp_parts`, `part` es el número de parte (desde 1) y 
 - Errores:
   - 400 validación: carrito vacío, más de 50 líneas, cantidad fuera de 1 a 50, `note` de más de 200 o `customer_name` de más de 50 caracteres, `product_id` repetido o no UUID.
   - 404 `TENANT_NOT_FOUND` / `STORE_NOT_FOUND`.
+  - 403 `OUT_OF_RANGE` (RF-037): el cliente está a más de 100 m del local. No se guarda nada; `details: { "distance_m": 340, "max_distance_m": 100 }`. La web muestra "Para hacer el pedido tenés que estar en el local" y conserva el carrito.
+  - 422 `LOCATION_REQUIRED` (RF-037): el local tiene ubicación y el body no trae `location` (o está incompleto). La web pide permitir la ubicación.
+  - 422 `LOCATION_INACCURATE` (RF-037): `location.accuracy` mayor que 100 m. La web pide reintentar (acercarse a una ventana, activar ubicación precisa).
   - 409 `PRODUCTS_UNAVAILABLE`: algún producto no existe en el local o está no disponible. No se guarda nada. El `details` lista cada uno para que la web pida revisar el carrito:
 
 ```json

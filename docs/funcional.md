@@ -32,12 +32,12 @@ Componentes: backoffice (Expo / React Native, Android y web), backend (NestJS + 
 **Releases.** El MVP se entrega en dos releases (detalle y fechas en `docs/planificacion.md`):
 
 - **R1, demo del lunes 02/11/2026:** tenant con slug y subdominio (`local1.localhost` en local), login y roles, backoffice (categorías, productos, contenido de pantalla, pantallas con token, órdenes con cambio de estado, WhatsApp del local), reproductor de pantalla con QR y consulta de cambios, autopedido (catálogo, carrito de 1 a 50 por producto, confirmación, orden guardada y enlace `wa.me` dividido en partes cuando el mensaje es largo) y local sin número de WhatsApp con la orden visible en el backoffice. En R1 el local es único por tenant (se ve y se edita) y el producto tiene imagen (RF-012). R1 incluye también la integridad del pedido y del mensaje (RNF-001) y el QR legible a distancia (RNF-009).
-- **R2, desde el 03/11/2026:** catálogo desde una foto con IA, varios locales por tenant con empleados asignados, regeneración del token de pantalla, ubicación del local por GPS desde el backoffice, tenant suspendido, panel Root, métricas, despliegue de producción con certificado wildcard y todo lo que no hace falta para la demostración de punta a punta de R1.
+- **R2, desde el 03/11/2026:** catálogo desde una foto con IA, varios locales por tenant con empleados asignados, regeneración del token de pantalla, ubicación del local por GPS desde el backoffice, pedido solo dentro del local verificado por GPS, tenant suspendido, panel Root, métricas, despliegue de producción con certificado wildcard y todo lo que no hace falta para la demostración de punta a punta de R1.
 
 | Release | Historias de usuario |
 | --- | --- |
 | R1 | HU-02, HU-03, HU-04, HU-06, HU-07, HU-08, HU-09, HU-12, HU-13, HU-14, HU-15, HU-16, HU-17, HU-18, HU-19, HU-20, HU-21, HU-22, HU-23 |
-| R2 | HU-10, HU-11, HU-24 |
+| R2 | HU-10, HU-11, HU-24, HU-25 |
 | R1 y R2 (cada historia indica qué RF va en cada release) | HU-01, HU-05 |
 
 **Dentro del alcance del MVP completo** (R1 más R2) está lo descrito arriba; la lista anterior de funciones del MVP se reparte entre los dos releases.
@@ -105,8 +105,9 @@ Notas de multi-tenancy:
 1. El cliente escanea el QR; se abre la web del local.
 2. Navega por categorías y agrega productos al carrito.
 3. Opcionalmente escribe nota y nombre.
-4. Confirma: el backend guarda la orden en estado "generada" con su origen.
-5. Si el local tiene número de WhatsApp, se abre WhatsApp con el mensaje armado y el cliente lo envía. Si el mensaje es largo, se divide en partes numeradas y el cliente envía cada una con su botón "Enviar parte N/M". Si el local no tiene número, la web muestra "Tu pedido fue registrado, el comercio lo verá en su panel" y no abre WhatsApp.
+4. Confirma: el navegador pide permiso de ubicación y envía latitud, longitud y precisión junto con el pedido.
+5. El backend verifica que el cliente esté dentro del radio del local (si el local tiene ubicación guardada). Si está fuera, no guarda la orden y la web informa "Para hacer el pedido tenés que estar en el local"; el carrito se conserva. Si está dentro, guarda la orden en estado "generada" con su origen.
+6. Si el local tiene número de WhatsApp, se abre WhatsApp con el mensaje armado y el cliente lo envía. Si el mensaje es largo, se divide en partes numeradas y el cliente envía cada una con su botón "Enviar parte N/M". Si el local no tiene número, la web muestra "Tu pedido fue registrado, el comercio lo verá en su panel" y no abre WhatsApp.
 
 ### 6.4 El comercio gestiona las órdenes
 1. El empleado abre el listado de órdenes del local.
@@ -796,6 +797,60 @@ Escenario: Local sin ubicación
   Entonces no se muestra el enlace "Cómo llegar"
 ```
 
+### HU-25 Pedir solo desde el local
+Como comercio quiero que los pedidos solo se puedan hacer desde el local para evitar pedidos de personas que no están presentes.
+
+Requerimientos: RF-037 (depende de RF-036, RF-028 y RF-030; deseable RF-025)
+
+Release: R2
+
+```gherkin
+Escenario: Pedido dentro del radio
+  Dado un local con ubicación guardada
+  Y un cliente a 100 m o menos del local, con precisión de 100 m o mejor
+  Cuando confirma el pedido y acepta el permiso de ubicación
+  Entonces el sistema guarda la orden como "generada"
+
+Escenario: Pedido fuera del radio
+  Dado un local con ubicación guardada
+  Y un cliente a más de 100 m del local
+  Cuando confirma el pedido
+  Entonces el sistema no guarda la orden
+  Y muestra "Para hacer el pedido tenés que estar en el local"
+  Y el carrito se conserva para reintentar
+
+Escenario: Permiso de ubicación denegado
+  Dado que el cliente rechazó el permiso de ubicación o su dispositivo no la ofrece
+  Cuando confirma el pedido
+  Entonces el sistema no confirma el pedido
+  Y explica que necesita la ubicación para pedir desde el local
+  Y el carrito se conserva
+
+Escenario: Precisión insuficiente
+  Dado que el GPS informa una precisión peor que 100 m
+  Cuando el cliente confirma el pedido
+  Entonces el sistema no guarda la orden
+  Y le pide reintentar acercándose a una ventana o activando la ubicación precisa
+
+Escenario: Local sin ubicación guardada
+  Dado un local sin ubicación guardada
+  Cuando un cliente confirma el pedido
+  Entonces el sistema registra la orden sin verificar la ubicación
+  Y el backoffice avisa al dueño que los pedidos no están restringidos por ubicación hasta guardarla
+
+Escenario: Coordenadas manipuladas o ausentes
+  Dado un local con ubicación guardada
+  Cuando el backend recibe un pedido sin coordenadas, o con coordenadas que lo ubican fuera del radio
+  Entonces rechaza el pedido y no lo registra
+
+Escenario: Distancia justo en el límite
+  Dado un cliente a exactamente 100 m del local
+  Cuando confirma el pedido
+  Entonces el sistema lo acepta; a más de 100 m lo rechaza
+
+Nota: el radio (100 m) es una constante configurable del servidor; valor propuesto. Las coordenadas se usan solo para la verificación y no se guardan en la orden. Limitación conocida: el GPS del cliente puede falsearse; el control disuade pedidos remotos, no garantiza presencia.
+```
+
 ## 9. Trazabilidad
 
-Todos los RF (RF-001 a RF-036) están cubiertos por al menos una historia (HU-01 a HU-24). Cada historia lleva su release (R1 o R2) y coincide con la columna Release de `docs/requerimientos.xlsx`. Los casos de prueba se vincularán en la matriz de trazabilidad de `docs/testing.md`.
+Todos los RF (RF-001 a RF-037) están cubiertos por al menos una historia (HU-01 a HU-25). Cada historia lleva su release (R1 o R2) y coincide con la columna Release de `docs/requerimientos.xlsx`. Los casos de prueba se vincularán en la matriz de trazabilidad de `docs/testing.md`.

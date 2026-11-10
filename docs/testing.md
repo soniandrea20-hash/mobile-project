@@ -147,7 +147,7 @@ En un equipo chico una persona puede cumplir varios roles, salvo que quien revis
 
 ## Casos de prueba
 
-Se definieron **227 casos**: cada escenario Gherkin de `docs/funcional.md` tiene su caso (en el mismo orden dentro de cada historia), más casos de reglas de negocio, casos para los RNF y, desde la revisión de cobertura, los casos que completan el mínimo de tres por requerimiento (feliz, negativa y estrés). Los casos TC-129 en adelante se agregaron sin renumerar los anteriores.
+Se definieron **237 casos**: cada escenario Gherkin de `docs/funcional.md` tiene su caso (en el mismo orden dentro de cada historia), más casos de reglas de negocio, casos para los RNF y, desde la revisión de cobertura, los casos que completan el mínimo de tres por requerimiento (feliz, negativa y estrés). Los casos TC-129 en adelante se agregaron sin renumerar los anteriores. TC-228 a TC-237 cubren RF-037 (pedido solo dentro del local, GPS).
 
 Convenciones: los pasos se numeran; "Automatizado" indica herramienta; "No (manual)" se usa cuando se necesita hardware real o juicio humano. Los datos de la semilla están en la sección Plan de pruebas. Los casos de tipo Límite prueban el valor exacto y el siguiente fuera del límite.
 
@@ -398,32 +398,42 @@ Los casos de estrés usan, salvo que se indique "meta propuesta", las metas de `
 | TC-225 | — | RNF-018 | Misma pantalla de órdenes en Android y web | Builds de APK y web | flujo de listar órdenes | 1. Ejecutar el flujo con Maestro en Android<br>2. Ejecutar el mismo flujo en web con Playwright | Mismo comportamiento y mismos textos en ambas plataformas | Funcional feliz | Media | Sí (Maestro, Playwright) |
 | TC-226 | — | RNF-018 | Código compartido bajo 90% hace fallar el chequeo | Rama de prueba | módulos duplicados por plataforma hasta quedar en 85% compartido | 1. Ejecutar el script de medición en CI | El job falla informando 85% < 90% | Negativa | Media | Sí (script CI) |
 | TC-227 | — | RNF-018 | 10 builds consecutivos con caché limpia | CI | 10 builds de APK y 10 de web, con caché limpia | 1. Ejecutar los 20 builds seguidos<br>2. Medir cada tiempo | Todos terminan en 30 min o menos; 0 builds fallidos | Estrés | Media | Sí (CI) |
+| TC-228 | HU-25 | RF-037 | Pedido dentro del radio | Local con ubicación guardada (RF-036); carrito con productos; permiso de ubicación concedido | ubicación simulada a 20 m del local, precisión 15 m | 1. Confirmar el pedido | 201; orden "generada" guardada; se abre WhatsApp con el mensaje armado | Funcional feliz | Alta | Sí (Playwright con geolocalización simulada; supertest) |
+| TC-229 | HU-25 | RF-037 | Pedido fuera del radio | Local con ubicación guardada; carrito con productos | ubicación simulada a 340 m del local, precisión 15 m | 1. Confirmar el pedido<br>2. Ver el mensaje<br>3. Listar órdenes en el backoffice | 403 `OUT_OF_RANGE`; la web muestra "Para hacer el pedido tenés que estar en el local"; no se guarda ninguna orden; el carrito se conserva y se puede reintentar | Negativa | Alta | Sí (Playwright; supertest) |
+| TC-230 | HU-25 | RF-037 | Permiso de ubicación denegado o geolocalización no disponible | Local con ubicación guardada; carrito con productos | permiso rechazado; navegador sin Geolocation API | 1. Confirmar el pedido en cada caso | No se envía el pedido; la web explica que necesita la ubicación para pedir desde el local; el carrito se conserva; sin orden guardada | Negativa | Alta | Sí (Playwright) |
+| TC-231 | HU-25 | RF-037 | Precisión en el límite: 100 m y 101 m | Local con ubicación guardada; cliente en el local | `accuracy` de 100 y de 101 | 1. POST /public/stores/:slug/orders con cada valor | 100 m se acepta (201); 101 m da 422 `LOCATION_INACCURATE` y no se guarda; la web pide reintentar | Límite | Alta | Sí (supertest; Jest) |
+| TC-232 | HU-25 | RF-037 | Distancia en el límite del radio: 100 m y 101 m | Local con ubicación guardada | coordenadas a 100 m y a 101 m del local, precisión 10 m (calculadas con Haversine) | 1. POST con cada coordenada | A 100 m se acepta (201); a 101 m da 403 `OUT_OF_RANGE` y no se guarda | Límite | Alta | Sí (Jest: use case; supertest) |
+| TC-233 | HU-25 | RF-037 | Local sin ubicación guardada | Local sin ubicación; carrito con productos | pedido válido con y sin `location` | 1. Confirmar el pedido<br>2. Abrir la configuración del local en el backoffice | 201 en ambos casos (no se verifica ubicación); el backoffice avisa al dueño que los pedidos no están restringidos por ubicación hasta guardarla | Funcional feliz | Media | Sí (supertest; Playwright) |
+| TC-234 | HU-25 | RF-037 | Coordenadas ausentes o manipuladas enviadas directo a la API | Local con ubicación guardada; sin pasar por la web | sin `location`; `location` incompleta; latitud 91; coordenadas lejanas | 1. POST con cada cuerpo | Sin `location` o incompleta: 422 `LOCATION_REQUIRED`; latitud fuera de rango: 400; coordenadas lejanas: 403 `OUT_OF_RANGE`; ninguna orden registrada. Limitación conocida: coordenadas falsas que caen dentro del radio se aceptan (el control disuade, no garantiza presencia) | Seguridad | Alta | Sí (supertest) |
+| TC-235 | HU-25 | RF-037 | Privacidad: las coordenadas no se guardan ni se registran en logs | Local con ubicación guardada; logs estructurados activos | pedido válido con `location` | 1. Confirmar el pedido<br>2. Revisar `orders` y `order_items` en la base<br>3. Buscar latitud y longitud en los logs | Ninguna columna de la orden contiene las coordenadas; los logs no incluyen latitud, longitud ni precisión del cliente | Seguridad | Alta | Sí (supertest; revisión de logs) |
+| TC-236 | HU-25 | RF-037 | Pedidos concurrentes dentro y fuera del radio | Staging; local con ubicación guardada | k6: 100 VUs durante 5 min, 50% con coordenadas fuera del radio | 1. Ejecutar el script<br>2. Contar órdenes guardadas y respuestas 403 | 100% de los pedidos fuera del radio rechazados con 403 y sin orden; 100% de los de dentro guardados; p95 < 500 ms; errores inesperados < 1% | Estrés | Media | Sí (k6) |
+| TC-237 | HU-25 | RF-037 | Prueba con GPS real dentro y fuera del local | Celular Android real con GPS; local con ubicación guardada desde el mismo celular (RF-036) | pedido desde el local, desde la vereda a más de 100 m y con ubicación aproximada | 1. Confirmar el pedido en cada lugar<br>2. Repetir con ubicación aproximada (sin precisión alta) | Dentro: orden guardada; a más de 100 m: rechazo con el mensaje de estar en el local; con ubicación aproximada y precisión peor que 100 m: pide reintentar | Funcional feliz | Media | No (manual) |
 
 ### Resumen
 
 | Tipo | Casos |
 | --- | --- |
-| Funcional feliz | 66 |
-| Negativa | 65 |
-| Estrés | 53 |
-| Límite | 22 |
-| Seguridad | 12 |
+| Funcional feliz | 69 |
+| Negativa | 67 |
+| Estrés | 54 |
+| Límite | 24 |
+| Seguridad | 14 |
 | Performance | 4 |
 | UI | 5 |
-| **Total** | **227** |
+| **Total** | **237** |
 
 Casos por release (según el requerimiento al que pertenece cada caso; un caso que cubre requerimientos de ambos releases cuenta como R1):
 
 | Release | Casos | Funcional feliz | Negativa | Estrés | Límite | Seguridad | Performance | UI |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | R1 | 172 | 51 | 49 | 38 | 19 | 11 | 1 | 3 |
-| R2 | 55 | 15 | 16 | 15 | 3 | 1 | 3 | 2 |
-| **Total** | **227** | **66** | **65** | **53** | **22** | **12** | **4** | **5** |
+| R2 | 65 | 18 | 18 | 16 | 5 | 3 | 3 | 2 |
+| **Total** | **237** | **69** | **67** | **54** | **24** | **14** | **4** | **5** |
 
-- Prioridad: Alta 128, Media 91, Baja 8.
-- Automatizados (total o parcialmente): 215 de 227; manuales: 12.
+- Prioridad: Alta 135, Media 94, Baja 8.
+- Automatizados (total o parcialmente): 224 de 237; manuales: 13.
 - Casos por historia: hasta 12 (ver la RTM para el detalle).
-- Cada uno de los 35 RF y los 18 RNF tiene al menos un caso Funcional feliz, uno Negativa y uno Estrés (53 requerimientos, 159 combinaciones mínimas). Ver "Cobertura mínima de tres casos por requerimiento" en la RTM.
+- Cada uno de los 35 RF (RF-001 a RF-035) y los 18 RNF tiene al menos un caso Funcional feliz, uno Negativa y uno Estrés (53 requerimientos, 159 combinaciones mínimas). Ver "Cobertura mínima de tres casos por requerimiento" en la RTM.
 
 
 ## Matriz de trazabilidad de requisitos (RTM)
@@ -472,6 +482,7 @@ La columna Release (R1 o R2) coincide con la del xlsx de requerimientos. Nota: R
 | HU-22 / RF-033 | Configuración del número de WhatsApp del local | R1 | Número válido; número inválido; número vacío (HU-22) | TC-094, TC-102, TC-103, TC-104, TC-105, TC-173 | Funcional feliz, Negativa, Estrés, Límite | TC-094, TC-102, TC-104 | TC-103 | TC-173 | Parcial: TC-104 cubierto con Jest en caso de uso (mocks); validación del formato y supertest pendientes | — | — |
 | HU-23 / RF-034 | Mensaje del pedido y enlace wa.me | R1 | Mensaje completo; caracteres especiales; cliente no envía (HU-23) | TC-106, TC-107, TC-108, TC-109, TC-174, TC-175, TC-176, TC-177, TC-178, TC-179 | Funcional feliz, Negativa, Estrés, Límite | TC-106, TC-174, TC-175 | TC-109, TC-178 | TC-179 | Pendiente | — | — |
 | HU-01 / RF-035 | Administración de tenants por el Root | R2 | Alta exitosa; tenant suspendido (HU-01) | TC-001, TC-005, TC-006, TC-007, TC-075, TC-180 | Funcional feliz, Negativa, Estrés, Seguridad | TC-001, TC-006 | TC-005, TC-075 | TC-180 | Pendiente | — | — |
+| HU-25 / RF-037 | Pedido solo dentro del local (GPS) | R2 | Pedido dentro del radio; fuera del radio; permiso denegado; precisión insuficiente; local sin ubicación; coordenadas manipuladas (HU-25) | TC-228, TC-229, TC-230, TC-231, TC-232, TC-233, TC-234, TC-235, TC-236, TC-237 | Funcional feliz, Negativa, Estrés, Límite, Seguridad | TC-228, TC-233, TC-237 | TC-229, TC-230 | TC-236 | Pendiente | — | — |
 | RNF-001 | Integridad del pedido y del mensaje | R1 | 100% de coincidencia en ítems, cantidades y total en 50 pedidos de prueba automatizados; 0 diferencias de total. Cada parte del mensaje de hasta 1500 caracteres; los pedidos más largos se dividen en partes numeradas sin cortar ítems. | TC-108, TC-110, TC-181, TC-182 | Funcional feliz, Negativa, Estrés, Límite | TC-110 | TC-181 | TC-182 | Pendiente | — | — |
 | RNF-002 | Tiempo de carga del self-order | R2 | carga < 3 s en 4G simulada (Lighthouse); LCP ≤ 2,5 s; puntaje Lighthouse de performance ≥ 80. | TC-111, TC-183, TC-184, TC-185 | Funcional feliz, Negativa, Estrés, Performance | TC-183 | TC-184 | TC-185 | Pendiente | — | — |
 | RNF-003 | Tiempo de respuesta de la API | R2 | p95 < 500 ms con 50 usuarios concurrentes en catálogo y creación de órdenes (k6); tasa de error < 1%. | TC-112, TC-186, TC-187, TC-188 | Funcional feliz, Negativa, Estrés, Performance | TC-186 | TC-187 | TC-188 | Pendiente | — | — |
@@ -528,6 +539,7 @@ Lectura hacia atrás: BUG-001 → TC-034 → RF-012 → HU-07. Con eso se identi
 | HU-21 | Gestión de órdenes | R1 | RF-031, RF-032 | TC-096, TC-097, TC-098, TC-099, TC-100, TC-101, TC-170, TC-171, TC-172 |
 | HU-22 | Número de WhatsApp del local | R1 | RF-033 | TC-102, TC-103, TC-104, TC-105, TC-173 |
 | HU-23 | Mensaje de WhatsApp | R1 | RF-034 | TC-106, TC-107, TC-108, TC-109, TC-174, TC-175, TC-176, TC-177, TC-178, TC-179 |
+| HU-25 | Pedir solo desde el local | R2 | RF-037 | TC-228, TC-229, TC-230, TC-231, TC-232, TC-233, TC-234, TC-235, TC-236, TC-237 |
 
 ### Cobertura mínima de tres casos por requerimiento
 
@@ -570,6 +582,7 @@ Regla del plan: cada requerimiento tiene como mínimo 3 casos (feliz, negativo y
 | RF-033 | R1 | 3 | 1 | 1 |
 | RF-034 | R1 | 3 | 2 | 1 |
 | RF-035 | R2 | 2 | 2 | 1 |
+| RF-037 | R2 | 3 | 2 | 1 |
 | RNF-001 | R1 | 1 | 1 | 1 |
 | RNF-002 | R2 | 1 | 1 | 1 |
 | RNF-003 | R2 | 1 | 1 | 1 |
