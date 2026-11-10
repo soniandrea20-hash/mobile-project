@@ -24,12 +24,12 @@ describe('cloudinary media', () => {
     (cloudinary.url as jest.Mock).mockReturnValue('https://res/x.png');
 
     expect(cloudinaryUrl('/t1/products/a.png')).toBe('https://res/x.png');
-    expect(cloudinary.url).toHaveBeenCalledWith('t1/products/a', { resource_type: 'image', format: 'png', secure: true });
+    expect(cloudinary.url).toHaveBeenCalledWith('mostrador/t1/products/a',{ resource_type: 'image', format: 'png', secure: true });
   });
 
   it('cloudinaryUrl usa video para mp4', () => {
     cloudinaryUrl('/t1/content/a.mp4');
-    expect(cloudinary.url).toHaveBeenCalledWith('t1/content/a', { resource_type: 'video', format: 'mp4', secure: true });
+    expect(cloudinary.url).toHaveBeenCalledWith('mostrador/t1/content/a',{ resource_type: 'video', format: 'mp4', secure: true });
   });
 
   it('uploadMedia sube el buffer con public_id, resource_type y sin sobrescribir', async () => {
@@ -40,7 +40,7 @@ describe('cloudinary media', () => {
     await uploadMedia('t1/content/a.mp4', bytes);
 
     expect(uploader.upload_stream).toHaveBeenCalledWith(
-      { public_id: 't1/content/a', resource_type: 'video', overwrite: false },
+      { public_id: 'mostrador/t1/content/a', resource_type: 'video', overwrite: false },
       expect.any(Function),
     );
     expect(end).toHaveBeenCalledWith(bytes);
@@ -51,11 +51,16 @@ describe('cloudinary media', () => {
     await expect(uploadMedia('t1/products/a.png', Buffer.alloc(1))).rejects.toThrow('boom');
   });
 
+  it('relee CLOUDINARY_URL en el primer uso porque el SDK la cachea al importarse', () => {
+    cloudinaryUrl('/t1/products/a.png');
+    expect(cloudinary.config).toHaveBeenCalledWith(true);
+  });
+
   it('removeMedia destruye con resource_type e invalidate', async () => {
     (uploader.destroy as jest.Mock).mockResolvedValue({ result: 'ok' });
 
     await removeMedia('t1/content/a.mp4');
 
-    expect(uploader.destroy).toHaveBeenCalledWith('t1/content/a', { resource_type: 'video', invalidate: true });
+    expect(uploader.destroy).toHaveBeenCalledWith('mostrador/t1/content/a',{ resource_type: 'video', invalidate: true });
   });
 });
