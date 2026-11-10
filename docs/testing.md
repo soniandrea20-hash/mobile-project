@@ -843,10 +843,11 @@ Automated (`backend/test/products`):
 - `image-type.spec.ts`: magic bytes JPG, PNG y WebP; GIF, exe renombrado, RIFF no WebP y buffers cortos devuelven null; límite 5 242 880 (TC-035).
 - `product-image.use-cases.spec.ts`: 415 `UNSUPPORTED_MEDIA_TYPE`, 422 `MEDIA_UNREADABLE`, 404; orden escribir nuevo, actualizar base, borrar viejo; el archivo nuevo se borra si falla la base; quitar imagen; borrar producto borra el archivo.
 - `local-image-storage.spec.ts`: sharp real en un directorio temporal; PNG de 4000 px queda en 1280 px o menos (TC-036), una imagen de 200 px no se agranda, bytes corruptos dan 422 sin dejar archivos.
-- `media-http.spec.ts`: supertest con app Nest mínima; 5 242 880 bytes aceptado y 5 242 881 da 413 con `code: MEDIA_TOO_LARGE` (TC-033, TC-034); `GET /media/*` responde con `Cache-Control: public, max-age=31536000, immutable` aunque un middleware rechace toda ruta (sin tenant), 404 si no existe, sin listado de directorios ni path traversal. Con Blob activo (`serveMedia` con URL base) responde 302 con `Location` = URL del contenedor + ruta sin pasar por el middleware de tenant, y 404 ante traversal (`..`, `%2e%2e`, `%2f`, `%5c`), ruta vacía o `%` inválido.
-- `test/media/blob-storage.spec.ts` (Azure Blob Storage, `ContainerClient` simulado): `BlobImageStorage` sube la imagen reducida a 1280 px con nombre `<tenant>/products/<uuid>.<ext>`, `Content-Type` y `Cache-Control: public, max-age=31536000, immutable`, y con bytes corruptos da 422 sin subir; `BlobContentStorage` sube los bytes intactos a `<tenant>/content/<uuid>.<ext>` con `Content-Type` según la extensión; en ambos `remove` usa `deleteIfExists` y no lanza si Azure falla.
+- `media-http.spec.ts`: supertest con app Nest mínima; 5 242 880 bytes aceptado y 5 242 881 da 413 con `code: MEDIA_TOO_LARGE` (TC-033, TC-034); `GET /media/*` responde con `Cache-Control: public, max-age=31536000, immutable` aunque un middleware rechace toda ruta (sin tenant), 404 si no existe, sin listado de directorios ni path traversal. Con Cloudinary activo (`serveMedia` con un resolver ruta → URL) responde 302 con `Location` = URL que devuelve el resolver, sin pasar por el middleware de tenant, y 404 ante traversal (`..`, `%2e%2e`, `%2f`, `%5c`), ruta vacía o `%` inválido.
+- `test/media/cloudinary-media.spec.ts` (SDK `cloudinary` simulado): `cloudinaryEnabled` depende solo de `CLOUDINARY_URL`; `cloudinaryUrl` arma la URL con el helper del SDK (`image` para jpg/png/webp, `video` para mp4, `public_id` sin extensión, `secure: true`); `uploadMedia` usa `upload_stream` con `public_id`, `resource_type` y `overwrite: false`, y rechaza si Cloudinary falla; `removeMedia` llama a `destroy` con `resource_type` e `invalidate: true`.
+- `test/media/cloudinary-storage.spec.ts`: `CloudinaryImageStorage` sube la imagen reducida a 1280 px con nombre `<tenant>/products/<uuid>.<ext>` y con bytes corruptos da 422 sin subir; `CloudinaryContentStorage` sube los bytes intactos a `<tenant>/content/<uuid>.<ext>`; en ambos `remove` no lanza si Cloudinary falla (solo `warn`).
 
-Manual (almacenamiento en Azure Blob; contra Azurite o una cuenta real con `AZURE_STORAGE_CONNECTION_STRING` y el contenedor `AZURE_STORAGE_CONTAINER` ya creado): subir una imagen de producto y un video de pantalla y comprobar que los blobs aparecen como `<tenant>/products/<uuid>.<ext>` y `<tenant>/content/<uuid>.mp4` con `Content-Type` y `Cache-Control` correctos; `GET /media/<ruta>` sin `Host` de tenant da 302 al blob y el navegador lo descarga; `GET /media/..%2f..%2fx` da 404; con `MEDIA_PUBLIC_BASE_URL` definida, el `Location` usa esa base; quitar la imagen o borrar el contenido elimina el blob; subir un MP4 corrupto da 422 `MEDIA_UNREADABLE` y no deja ningún blob; sin `AZURE_STORAGE_CONNECTION_STRING` los archivos siguen en `UPLOADS_DIR` y `/media` los sirve con 200.
+Manual (almacenamiento en Cloudinary; cuenta real con `CLOUDINARY_URL` definida): subir una imagen de producto y un video de pantalla y comprobar en la Media Library que aparecen como `<tenant>/products/<uuid>` (tipo Image) y `<tenant>/content/<uuid>` (tipo Video); `GET /media/<tenant>/products/<uuid>.<ext>` sin `Host` de tenant da 302 a `https://res.cloudinary.com/<cloud>/image/upload/...` y la imagen se descarga; `GET /media/<tenant>/content/<uuid>.mp4` da 302 a `.../video/upload/...` y el video se reproduce; `GET /media/..%2f..%2fx` da 404; quitar la imagen elimina el recurso `image`, y borrar un contenido de video elimina el recurso `video` (si el `destroy` no usara `resource_type: video` el video quedaría huérfano); subir un MP4 corrupto da 422 `MEDIA_UNREADABLE` y no deja ningún recurso; sin `CLOUDINARY_URL` los archivos siguen en `UPLOADS_DIR` y `/media` los sirve con 200; límites de la app (imagen 5 MB, video 50 MB) por debajo de los del plan de Cloudinary.
 
 Pending: supertest del endpoint real `PUT/DELETE /products/:id/image` con base (403 sin permiso, 404 de otro tenant, 400 sin `file`); TC-037 manual en Android físico; TC-142 (k6).
 
@@ -969,12 +970,14 @@ Automated (`backend/test/db/plan-scripts.spec.ts`):
 - Some applied: only pending ones; all applied: `[]`.
 - Checksum mismatch throws naming the version; applied version without a file throws.
 - `checksum()` returns a stable 64-char hex.
+- `backend/test/db/db-ssl.spec.ts`: `dbSsl(ca)` returns `{ ca, rejectUnauthorized: true }` with a CA and `undefined` without it (so `PGSSLMODE` keeps applying).
 
 Manual (`npm run db:apply` from `backend/`):
 - Fresh DB: applies `001_schema`, creates `schema_versions`.
 - Run twice: second run applies 0 and skips all.
 - Edit an applied script: run fails naming it, nothing applied.
 - Failing script: rolled back, no `schema_versions` row for it.
+- TLS (DigitalOcean Managed PostgreSQL): with `DB_CA_CERT` set to the cluster CA PEM, both the app and `db:apply` connect and verify the certificate; with `PGSSLMODE=require` and no `DB_CA_CERT` against that cluster the connection fails with "self-signed certificate in certificate chain"; with neither variable, a local non-TLS database still works.
 
 ### R1 schema and dev seed (#78)
 
@@ -1059,14 +1062,14 @@ Manual (app web): con el Root en `admin.<base>` el login muestra solo la pestañ
 
 Pending: TC-180 (suspensión bajo carga) necesita k6 y staging; supertest con base para el efecto sobre pedidos en curso.
 
-### Despliegue en Azure (`docs/deploy.md`)
+### Despliegue en DigitalOcean App Platform (`docs/deploy.md`)
 
 Manual / no funcional:
 - Imagen: `docker build -t mobile-backend backend` termina sin error y `docker run --rm --entrypoint ffprobe mobile-backend -version` imprime la versión (sin `ffprobe` la subida de videos falla). La imagen corre como usuario `node` y `require('sharp')` y `require('./dist/app.module')` dentro de ella no fallan.
-- Arranque: con las variables de `docs/deploy.md` (base accesible con `PGSSLMODE=require` y `AZURE_STORAGE_CONNECTION_STRING`), el contenedor escucha en el puerto 3000 y `GET /media/<tenant>/products/<archivo>` responde 302 hacia la URL pública del blob; una ruta con `..%2f` responde 404.
-- Pipeline: un PR que toca `backend/` ejecuta solo el job `test` (`tsc` y Jest) y no despliega; un push a `main` ejecuta `test` y luego `deploy` (environment `production`), y la revisión activa de la Container App usa la imagen con el SHA del commit.
+- Arranque: con las variables de `docs/deploy.md` (`DB_CA_CERT` del cluster y `CLOUDINARY_URL`), el contenedor escucha en el puerto 3000 y `GET /media/<tenant>/products/<archivo>` responde 302 hacia `res.cloudinary.com/.../image/upload/...`; una ruta con `..%2f` responde 404; la app conecta a PostgreSQL con TLS verificado.
+- Pipeline: un PR que toca `backend/` ejecuta solo el job `test` (`tsc` y Jest) de `backend-ci`; un push a `main` ejecuta `test` y App Platform despliega la rama `main` por su integración con GitHub (`deploy_on_push`), visible en el historial de despliegues de la consola.
 - Pipeline negativo: con un test roto en el PR el job `test` falla y `deploy` no corre.
-- Seguridad: el workflow no contiene secretos (solo `secrets.AZURE_*` y `vars.*`); sin la credencial federada OIDC del environment `production` el login de Azure falla.
+- Seguridad: el workflow no contiene secretos ni credenciales de nube; `JWT_SECRET` y `CLOUDINARY_URL` son de tipo `SECRET` y no aparecen en `.do/app.yaml`.
 
 ### Tema y componentes compartidos del autopedido (`mobile/src/components/ui/mostrador`)
 

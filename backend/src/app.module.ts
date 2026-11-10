@@ -14,6 +14,7 @@ import { ContentModule } from './content/content.module';
 import { TenantMiddleware } from './tenants/api/tenant.middleware';
 import { logger } from './logging/app-logger';
 import { TypeOrmLogger } from './logging/typeorm-logger';
+import { dbSsl } from './db/db-ssl';
 
 @Module({
   imports: [ 
@@ -32,6 +33,7 @@ import { TypeOrmLogger } from './logging/typeorm-logger';
         username: config.getOrThrow<string>('DB_USERNAME'),
         password: config.getOrThrow<string>('DB_PASSWORD'),
         database: config.getOrThrow<string>('DB_NAME'),
+        ssl: dbSsl(config.get<string>('DB_CA_CERT')),
         autoLoadEntities: true, //registra entidades de los modulos
         synchronize: false, //nunca en prod
         logging: config.get<string>('DB_LOGGING') === 'true',

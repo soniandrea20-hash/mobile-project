@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Client } from 'pg';
+import { dbSsl } from '../../src/db/db-ssl';
 import { checksum, planScripts } from './plan-scripts';
 
 const scriptsDir = join(__dirname, '../../../database/scripts');
@@ -34,6 +35,7 @@ async function main() {
     user: process.env.DB_USERNAME,
     password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME,
+    ssl: dbSsl(process.env.DB_CA_CERT),
   });
   await client.connect();
 
