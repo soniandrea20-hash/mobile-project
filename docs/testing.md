@@ -957,12 +957,14 @@ Automated (`backend/test/db/plan-scripts.spec.ts`):
 - Some applied: only pending ones; all applied: `[]`.
 - Checksum mismatch throws naming the version; applied version without a file throws.
 - `checksum()` returns a stable 64-char hex.
+- `backend/test/db/db-ssl.spec.ts`: `dbSsl(ca)` returns `{ ca, rejectUnauthorized: true }` with a CA and `undefined` without it (so `PGSSLMODE` keeps applying).
 
 Manual (`npm run db:apply` from `backend/`):
 - Fresh DB: applies `001_schema`, creates `schema_versions`.
 - Run twice: second run applies 0 and skips all.
 - Edit an applied script: run fails naming it, nothing applied.
 - Failing script: rolled back, no `schema_versions` row for it.
+- TLS (DigitalOcean Managed PostgreSQL): with `DB_CA_CERT` set to the cluster CA PEM, both the app and `db:apply` connect and verify the certificate; with `PGSSLMODE=require` and no `DB_CA_CERT` against that cluster the connection fails with "self-signed certificate in certificate chain"; with neither variable, a local non-TLS database still works.
 
 ### R1 schema and dev seed (#78)
 

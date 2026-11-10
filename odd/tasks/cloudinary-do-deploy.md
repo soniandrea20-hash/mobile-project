@@ -26,7 +26,7 @@ User decision (2026-11-09): "storage: cloudinary, deploy: digital ocean desde gi
 
 ## Tasks
 - [x] T1 Cloudinary storage: resolver + adapters + single backend selector, remove Azure Blob, tests, `docs/testing.md`. Route: delegated (writer trigger, 2+ non-trivial files).
-- [ ] T2 DB TLS for DO Managed PostgreSQL (CA cert via env) in app and `db:apply`, tests. Route: delegated (same writer).
+- [x] T2 DB TLS for DO Managed PostgreSQL (CA cert via env) in app and `db:apply`, tests. Route: delegated (same writer).
 - [ ] T3 App Platform spec (`.do/app.yaml`), workflow tests-only, `docs/deploy.md` rewrite. Route: delegated (same writer).
 
 ## Acceptance criteria
@@ -38,6 +38,7 @@ User decision (2026-11-09): "storage: cloudinary, deploy: digital ocean desde gi
 ## Progress
 - Feature doc created.
 - T1 done: `src/media/cloudinary-media.ts` (selector `cloudinaryEnabled`, `cloudinaryUrl`, `uploadMedia`, `removeMedia`), Cloudinary adapters, `serveMedia(app, dir, resolveUrl)`, Azure removed. RED observed (modules missing) then GREEN. Verification (backend/): `tsc --noEmit` OK; `npm test` 41 suites / 373 tests pass; `grep @azure src scripts package.json` empty. User must add `CLOUDINARY_URL=` to `backend/.env.example`.
+- T2 done: verified in `pg` 8.23.0 (`connection-parameters.js`): `PGSSLMODE=require` gives `ssl: true`, i.e. default CA verification, so DO's private CA fails. `src/db/db-ssl.ts` `dbSsl()` used by `app.module.ts` and `scripts/db/apply-scripts.ts`. RED observed (module missing) then GREEN; `tsc` OK; `npm test` 42 suites / 375 tests pass.
 
 ## Next step
-T2.
+T3.
