@@ -27,7 +27,7 @@ User decision (2026-11-09): "storage: cloudinary, deploy: digital ocean desde gi
 ## Tasks
 - [x] T1 Cloudinary storage: resolver + adapters + single backend selector, remove Azure Blob, tests, `docs/testing.md`. Route: delegated (writer trigger, 2+ non-trivial files).
 - [x] T2 DB TLS for DO Managed PostgreSQL (CA cert via env) in app and `db:apply`, tests. Route: delegated (same writer).
-- [ ] T3 App Platform spec (`.do/app.yaml`), workflow tests-only, `docs/deploy.md` rewrite. Route: delegated (same writer).
+- [x] T3 App Platform spec (`.do/app.yaml`), workflow tests-only, `docs/deploy.md` rewrite. Route: delegated (same writer).
 
 ## Acceptance criteria
 - With `CLOUDINARY_URL` set, uploads go to Cloudinary and `/media/<path>` redirects to the right `image/upload` or `video/upload` URL; deletes use the matching `resource_type`.
@@ -39,6 +39,7 @@ User decision (2026-11-09): "storage: cloudinary, deploy: digital ocean desde gi
 - Feature doc created.
 - T1 done: `src/media/cloudinary-media.ts` (selector `cloudinaryEnabled`, `cloudinaryUrl`, `uploadMedia`, `removeMedia`), Cloudinary adapters, `serveMedia(app, dir, resolveUrl)`, Azure removed. RED observed (modules missing) then GREEN. Verification (backend/): `tsc --noEmit` OK; `npm test` 41 suites / 373 tests pass; `grep @azure src scripts package.json` empty. User must add `CLOUDINARY_URL=` to `backend/.env.example`.
 - T2 done: verified in `pg` 8.23.0 (`connection-parameters.js`): `PGSSLMODE=require` gives `ssl: true`, i.e. default CA verification, so DO's private CA fails. `src/db/db-ssl.ts` `dbSsl()` used by `app.module.ts` and `scripts/db/apply-scripts.ts`. RED observed (module missing) then GREEN; `tsc` OK; `npm test` 42 suites / 375 tests pass.
+- T3 done: `.do/app.yaml`, workflow renamed `backend-ci.yml` (tests only), `docs/deploy.md` rewritten, `docs/testing.md` deploy section updated. Spec checked against DO app-spec reference: `dockerfile_path` is relative to repo root, `source_dir` is the build context. Unverified: bindable names `USERNAME/PASSWORD/DATABASE/CA_CERT` (docs page only lists HOSTNAME/PORT/DATABASE_URL), wildcard domains. No `/health` route exists (tenant middleware 404s everything), so TCP check.
 
 ## Next step
-T3.
+User: add `CLOUDINARY_URL=` to `backend/.env.example`, create Cloudinary account and DO resources per `docs/deploy.md`.

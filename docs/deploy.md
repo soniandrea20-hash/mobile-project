@@ -1,135 +1,59 @@
-# Despliegue del backend en Azure
+# Despliegue del backend en DigitalOcean App Platform
 
-El backend (`backend/`) se despliega como contenedor en Azure Container Apps desde GitHub Actions (`.github/workflows/backend-deploy.yml`): en cada PR que toca `backend/` corre `tsc` y Jest; en cada push a `main` además construye la imagen en ACR y actualiza la Container App. La imagen (`backend/Dockerfile`) incluye `ffprobe` (paquete `ffmpeg`), que el backend usa para medir la duración de los videos.
+El backend (`backend/`) se despliega como contenedor en DigitalOcean App Platform, construido desde el repositorio de GitHub con `backend/Dockerfile`. Cada push a `main` despliega solo (`deploy_on_push: true` en `.do/app.yaml`). GitHub Actions (`.github/workflows/backend-ci.yml`) solo corre `tsc` y Jest en cada PR que toca `backend/` y en cada push a `main`; no tiene credenciales de nube. La imagen incluye `ffprobe` (paquete `ffmpeg`), que el backend usa para medir la duración de los videos.
 
-Configuración única, hecha una vez a mano. Los nombres son ejemplos; los flags de `az` conviene validarlos con `az <comando> --help` porque la CLI cambia entre versiones.
+Los medios (imágenes de productos y videos de pantallas) se guardan en Cloudinary; PostgreSQL es un Managed Database de DigitalOcean.
 
-```bash
-RG=mostrador-rg; LOC=brazilsouth
-ACR=mostradoracr            # único globalmente, solo minúsculas y números
-APP=mostrador-backend; ENV=mostrador-env
-PG=mostrador-pg; STORAGE=mostradormedia   # únicos globalmente
-az group create -n $RG -l $LOC
-```
+## Variables de entorno
 
-## 1. Registro de imágenes (ACR)
+| Variable | Origen |
+| --- | --- |
+| `DB_HOST`, `DB_PORT`, `DB_USERNAME`, `DB_PASSWORD`, `DB_NAME` | Variables enlazables del componente `databases` (ver `.do/app.yaml`) |
+| `DB_CA_CERT` | CA del cluster (`${db.CA_CERT}`); activa TLS verificado, ver sección 2 |
+| `JWT_SECRET` | Secreto largo, tipo `SECRET` |
+| `JWT_EXPIRE_SECONDS` | `600` |
+| `BASE_DOMAIN`, `WEB_ORIGIN_TEMPLATE` | `mostrador.io` y `https://{slug}.mostrador.io` |
+| `CLOUDINARY_URL` | `cloudinary://<api_key>:<api_secret>@<cloud_name>`, tipo `SECRET`; si falta, el backend guarda en disco local |
 
-```bash
-az acr create -g $RG -n $ACR --sku Basic
-```
+`PORT` no se define: el backend usa 3000, igual que `http_port`. Opcionales: `LOG_MODE=json`, `DB_LOGGING=true`.
 
-## 2. PostgreSQL Flexible Server
+Los nombres de las variables enlazables (`${db.HOSTNAME}`, `${db.PORT}`, `${db.USERNAME}`, `${db.PASSWORD}`, `${db.DATABASE}`, `${db.CA_CERT}`) y los campos del spec conviene validarlos contra la documentación vigente de App Platform al crear la app.
 
-```bash
-az postgres flexible-server create -g $RG -n $PG -l $LOC \
-  --admin-user mostrador --admin-password '<clave-fuerte>' \
-  --tier Burstable --sku-name Standard_B1ms \
-  --database-name mobile_project \
-  --public-access 0.0.0.0     # regla "permitir servicios de Azure"
-```
+## Configuración única (consola de DigitalOcean)
 
-- `--public-access 0.0.0.0` habilita solo servicios de Azure (la Container App); para correr `db:apply` desde tu máquina agregá tu IP con `az postgres flexible-server firewall-rule create -g $RG -n $PG --rule-name mi-ip --start-ip-address <ip> --end-ip-address <ip>`.
-- El servidor exige TLS. El backend no configura SSL en TypeORM; se activa con la variable `PGSSLMODE=require` (la lee `pg`, tanto en la app como en `db:apply`).
-- Host: `$PG.postgres.database.azure.com`.
+### 1. Cloudinary
 
-## 3. Storage Account (media)
+1. Crear una cuenta en Cloudinary y copiar el *API environment variable* del Dashboard (`cloudinary://...`). Ese valor es `CLOUDINARY_URL`.
+2. Los archivos quedan como `<tenant>/products/<uuid>` (imagen) y `<tenant>/content/<uuid>` (video); `/media/*` redirige (302) a la URL de entrega de Cloudinary.
 
-```bash
-az storage account create -g $RG -n $STORAGE -l $LOC --sku Standard_LRS \
-  --allow-blob-public-access true
-az storage container create --account-name $STORAGE -n media \
-  --public-access blob --auth-mode login
-az storage account show-connection-string -g $RG -n $STORAGE -o tsv   # AZURE_STORAGE_CONNECTION_STRING
-```
+### 2. PostgreSQL administrado
 
-El acceso público de lectura a nivel `blob` es necesario porque `/media/*` redirige (302) a la URL pública del blob. Si la creación del contenedor falla por permisos, asignate `Storage Blob Data Contributor` o usá `--account-key`.
+1. En la consola: *Databases > Create > PostgreSQL*. Anotar el nombre del cluster, la base (`mobile_project`) y el usuario; si difieren de `.do/app.yaml`, ajustar `cluster_name`, `db_name` y `db_user`.
+2. El cluster exige TLS con una CA propia de DigitalOcean que no es de confianza pública. Con solo `PGSSLMODE=require`, `pg` verifica contra el almacén público y falla con `self-signed certificate in certificate chain`. Por eso el backend lee `DB_CA_CERT` (contenido PEM) y conecta con `ssl: { ca, rejectUnauthorized: true }`, tanto la app como `db:apply`. Sin `DB_CA_CERT` todo funciona como antes (base local, `PGSSLMODE`).
+3. En *Trusted sources* del cluster agregar la app (una vez creada) y, para `db:apply`, la IP de la máquina desde la que se corre.
 
-## 4. Container Apps
+### 3. App
 
-```bash
-az containerapp env create -g $RG -n $ENV -l $LOC
+1. *Apps > Create App > GitHub*, autorizar la integración con GitHub y elegir `universidad-de-pilar/mobile-project`, rama `main`. Alternativa: crear la app importando `.do/app.yaml` (`doctl apps create --spec .do/app.yaml`, o *Edit app spec* en la consola).
+2. Verificar que el servicio usa `backend/Dockerfile` con contexto `backend`, puerto 3000, y que el componente de base de datos apunta al cluster existente.
+3. Cargar los secretos `JWT_SECRET` y `CLOUDINARY_URL` como variables de entorno cifradas (tipo *Encrypt*). No van en el repositorio.
+4. Crear el despliegue. Después, agregar la app como *Trusted source* del cluster (paso 2.3).
 
-# Primer despliegue con una imagen pública de relleno; el pipeline la reemplaza.
-az containerapp create -g $RG -n $APP --environment $ENV \
-  --image mcr.microsoft.com/k8se/quickstart:latest \
-  --ingress external --target-port 3000 \
-  --min-replicas 1 --max-replicas 2 \
-  --system-assigned
+## Base de datos
 
-# La identidad de la app puede bajar imágenes de ACR (sin contraseñas)
-PRINCIPAL=$(az containerapp show -g $RG -n $APP --query identity.principalId -o tsv)
-az role assignment create --assignee $PRINCIPAL --role AcrPull \
-  --scope $(az acr show -n $ACR --query id -o tsv)
-az containerapp registry set -g $RG -n $APP \
-  --server $ACR.azurecr.io --identity system
-```
-
-Secretos y variables (nada de esto va en el workflow):
-
-```bash
-az containerapp secret set -g $RG -n $APP --secrets \
-  db-password='<clave-fuerte>' \
-  jwt-secret='<secreto-largo>' \
-  storage-conn='<connection-string>'
-
-az containerapp update -g $RG -n $APP --set-env-vars \
-  DB_HOST=$PG.postgres.database.azure.com DB_PORT=5432 \
-  DB_USERNAME=mostrador DB_NAME=mobile_project PGSSLMODE=require \
-  DB_PASSWORD=secretref:db-password \
-  JWT_SECRET=secretref:jwt-secret JWT_EXPIRE_SECONDS=600 \
-  BASE_DOMAIN=mostrador.io \
-  WEB_ORIGIN_TEMPLATE='https://{slug}.mostrador.io' \
-  AZURE_STORAGE_CONNECTION_STRING=secretref:storage-conn \
-  AZURE_STORAGE_CONTAINER=media
-```
-
-`PORT` no se define: el backend usa 3000, igual que `--target-port`. Opcional: `MEDIA_PUBLIC_BASE_URL` si los medios se sirven por un CDN.
-
-## 5. Base de datos
-
-Los scripts de `database/scripts/*.sql` son idempotentes y se aplican con `db:apply` (lleva el registro en `schema_versions`). Desde `backend/`, con un `.env` apuntando a Azure (y `PGSSLMODE=require`) y tu IP en el firewall:
+Los scripts de `database/scripts/*.sql` son idempotentes y se aplican con `db:apply` (lleva el registro en `schema_versions`). Desde `backend/`, con un `.env` apuntando al cluster (`DB_HOST` público, `DB_PORT`, credenciales y `DB_CA_CERT` con el PEM; la CA se descarga desde la consola del cluster) y la IP de la máquina como *Trusted source*:
 
 ```bash
 npm run db:apply
 ```
 
-El pipeline no aplica scripts; se corre a mano antes de desplegar una versión que los cambie.
-
-## 6. GitHub Actions con OIDC (sin secretos de larga vida)
-
-```bash
-APP_ID=$(az ad app create --display-name mostrador-github --query appId -o tsv)
-az ad sp create --id $APP_ID
-az ad app federated-credential create --id $APP_ID --parameters '{
-  "name": "github-production",
-  "issuer": "https://token.actions.githubusercontent.com",
-  "subject": "repo:universidad-de-pilar/mobile-project:environment:production",
-  "audiences": ["api://AzureADTokenExchange"]
-}'
-az role assignment create --assignee $APP_ID --role Contributor \
-  --scope $(az group show -n $RG --query id -o tsv)
-az role assignment create --assignee $APP_ID --role AcrPush \
-  --scope $(az acr show -n $ACR --query id -o tsv)
-```
-
-`Contributor` sobre el grupo de recursos es lo más simple; se puede acotar con un rol propio si se necesita.
-
-En GitHub, crear el environment `production` (se puede agregar aprobación manual) y cargar:
-
-| Tipo | Nombre | Valor |
-| --- | --- | --- |
-| Secret | `AZURE_CLIENT_ID` | `$APP_ID` |
-| Secret | `AZURE_TENANT_ID` | `az account show --query tenantId -o tsv` |
-| Secret | `AZURE_SUBSCRIPTION_ID` | `az account show --query id -o tsv` |
-| Variable | `ACR_NAME` | `$ACR` |
-| Variable | `CONTAINER_APP_NAME` | `$APP` |
-| Variable | `RESOURCE_GROUP` | `$RG` |
-
-El deploy usa `az acr build` (la imagen se construye en ACR, no hace falta Docker en el runner) y `az containerapp update --image` con el SHA del commit como tag.
+El despliegue no aplica scripts; se corre a mano antes de desplegar una versión que los cambie.
 
 ## Brechas conocidas
 
-- **Subdominios por tenant.** El backend resuelve el tenant por `{slug}.BASE_DOMAIN`. Container Apps necesita un dominio personalizado wildcard (`*.mostrador.io`) con certificado propio (bring-your-own, PFX): los certificados administrados de Azure no cubren wildcards. Hasta tenerlo, se puede probar con el header `X-Tenant-Slug` sobre el FQDN que asigna Azure. El CORS de `main.ts` ya acepta `https://*.mostrador.io`.
-- **App móvil (Expo)** y web de autopedido: no se despliegan con este pipeline.
-- **Migraciones de base de datos**: manuales (sección 5).
-- **Backups y escalado** de PostgreSQL: valores por defecto del tier Burstable.
+- **Subdominios por tenant (verificar).** El backend resuelve el tenant por `{slug}.BASE_DOMAIN`. No se verificó que App Platform admita dominios wildcard (`*.mostrador.io`) ni cómo se emite su certificado; hay que confirmarlo en la documentación de DigitalOcean antes de depender de esto. Mientras tanto se puede probar con el header `X-Tenant-Slug` sobre el dominio `*.ondigitalocean.app` de la app. El CORS de `main.ts` ya acepta `https://*.mostrador.io`.
+- **Límites de Cloudinary.** La app limita imágenes a 5 MB y videos a 50 MB; los topes del plan gratuito de Cloudinary (imagen 10 MB, video 100 MB, según la documentación conocida al escribir esto) están por encima, pero hay que confirmarlos en el plan contratado, junto con el almacenamiento y el ancho de banda.
+- **Health check.** No hay ruta pública sin tenant, por lo que el servicio usa el check TCP por defecto.
+- **App móvil (Expo)** y web de autopedido: no se despliegan con este flujo.
+- **Migraciones de base de datos**: manuales (sección anterior).
+- **Backups y escalado** de PostgreSQL: valores por defecto del plan elegido.

@@ -1049,14 +1049,14 @@ Manual (app web): con el Root en `admin.<base>` el login muestra solo la pestañ
 
 Pending: TC-180 (suspensión bajo carga) necesita k6 y staging; supertest con base para el efecto sobre pedidos en curso.
 
-### Despliegue en Azure (`docs/deploy.md`)
+### Despliegue en DigitalOcean App Platform (`docs/deploy.md`)
 
 Manual / no funcional:
 - Imagen: `docker build -t mobile-backend backend` termina sin error y `docker run --rm --entrypoint ffprobe mobile-backend -version` imprime la versión (sin `ffprobe` la subida de videos falla). La imagen corre como usuario `node` y `require('sharp')` y `require('./dist/app.module')` dentro de ella no fallan.
-- Arranque: con las variables de `docs/deploy.md` (base accesible con `PGSSLMODE=require` y `AZURE_STORAGE_CONNECTION_STRING`), el contenedor escucha en el puerto 3000 y `GET /media/<tenant>/products/<archivo>` responde 302 hacia la URL pública del blob; una ruta con `..%2f` responde 404.
-- Pipeline: un PR que toca `backend/` ejecuta solo el job `test` (`tsc` y Jest) y no despliega; un push a `main` ejecuta `test` y luego `deploy` (environment `production`), y la revisión activa de la Container App usa la imagen con el SHA del commit.
+- Arranque: con las variables de `docs/deploy.md` (`DB_CA_CERT` del cluster y `CLOUDINARY_URL`), el contenedor escucha en el puerto 3000 y `GET /media/<tenant>/products/<archivo>` responde 302 hacia `res.cloudinary.com/.../image/upload/...`; una ruta con `..%2f` responde 404; la app conecta a PostgreSQL con TLS verificado.
+- Pipeline: un PR que toca `backend/` ejecuta solo el job `test` (`tsc` y Jest) de `backend-ci`; un push a `main` ejecuta `test` y App Platform despliega la rama `main` por su integración con GitHub (`deploy_on_push`), visible en el historial de despliegues de la consola.
 - Pipeline negativo: con un test roto en el PR el job `test` falla y `deploy` no corre.
-- Seguridad: el workflow no contiene secretos (solo `secrets.AZURE_*` y `vars.*`); sin la credencial federada OIDC del environment `production` el login de Azure falla.
+- Seguridad: el workflow no contiene secretos ni credenciales de nube; `JWT_SECRET` y `CLOUDINARY_URL` son de tipo `SECRET` y no aparecen en `.do/app.yaml`.
 
 ### Tema y componentes compartidos del autopedido (`mobile/src/components/ui/mostrador`)
 
